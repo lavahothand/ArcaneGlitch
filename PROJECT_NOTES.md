@@ -34,7 +34,7 @@ The metadata files are JavaScript text files loaded before `main.js` so the game
   - `resetOtherCooldowns`: clears cooldowns on all other equipped programs.
   - `healIntegrity`: restores Integrity by `amount`.
   - `blinkStraight`: teleports exactly `distance` spaces in a straight line.
-  - `nextTurnExec`: adds `amount` temporary Actions on the next player turn.
+  - `nextTurnExec`: adds `amount` temporary Executions on the next player turn.
   - `revealRiftThreads`: temporarily reveals all uncollected Rift Thread hexes.
   - `pushEnemy`: targets an adjacent enemy, pushes it one hex away, and applies `stunTurns`.
   - `sightRangeBonus`: increases line of sight by `amount` for `playerTurns`.
@@ -187,7 +187,7 @@ Rooms are exploration + Thread Hunt rooms. The player must collect all Rift Thre
 | Room Tier | Hex Tiles | Rift Threads | Sigils | Enemies |
 |-----------|-----------|--------------|--------|---------|
 | 1         | 30        | 1            | 1      | 1 stationary |
-| 2         | 48        | 2            | 2      | 2       |
+| 2         | 48        | 2            | 1      | 2       |
 | 3         | 60        | 2            | 2      | 3       |
 | 4         | 72        | 3            | 3      | 4       |
 | 5         | 84        | 4            | 3      | 5       |
@@ -210,8 +210,8 @@ The camera bounds are intended to allow any hex tile to be centered in the viewp
 - `Move` enables adjacent movement selection.
 - `Sigil-Cast` activates the Sigil-Casting panel below the program list.
 - The first `Cast Sigils` roll casts all equipped dice automatically.
-- Each turn starts with Actions equal to the current Actions stat. Each hex moved spends 1 Action, and each `Cast Sigils` roll spends 1 Action immediately when the roll button is pressed. Opening the Sigil-Casting panel does not spend an Action.
-- If Actions allow more than one Sigil-Cast, later casts can choose unassigned sigils to reroll while keeping the others.
+- Each turn starts with Actions equal to the current Actions stat. Each hex moved spends 1 Action. Opening the Sigil-Casting panel spends 1 Action and starts a full Sigil-Cast.
+- Executions control roll attempts inside the active Sigil-Cast. The first roll casts all equipped dice automatically; later Execution rolls can choose unassigned sigils to reroll while keeping the others.
 - `End Turn` resets Actions, advances the turn counter, runs the current Glitch Spawn step, and resolves adjacent enemy attacks.
 - If all Glitchspawn in the room are derezzed, a one-time notice appears. After that, enemy turns are skipped and movement becomes unrestricted for the rest of the room.
 - The map viewport shows the current phase as `Player Turn` or `Glitchspawn Turn` in its upper-right corner.
@@ -314,7 +314,7 @@ Implemented program effects:
 - `PUSH`: consumes one common Life and one uncommon Life symbol, then pushes an adjacent enemy one hex away and stuns it for its next turn.
 - `VISION`: consumes one common Mind and one uncommon Mind symbol, then increases line of sight by 1 until the end of the next player turn.
 - `Physical Damage`: consumes one or more symbols based on the best matching group, targets an adjacent enemy, and deals physical damage minus Physical Defense.
-- `FOCUS`: consumes one common Mind symbol and adds 1 temporary Action to the next player turn.
+- `FOCUS`: consumes one common Mind symbol and adds 1 temporary Execution to the next player turn.
 
 ## Enemies
 

@@ -8,7 +8,7 @@
 // - resetOtherCooldowns: clears cooldowns on all other equipped programs.
 // - healIntegrity: restores Integrity by amount.
 // - blinkStraight: teleports exactly distance spaces in a straight line.
-// - nextTurnExec: adds amount temporary Actions to the next player turn.
+// - nextTurnExec: adds amount temporary Executions to the next player turn.
 // - revealRiftThreads: temporarily reveals Rift Thread hexes.
 // - pushEnemy: targets an adjacent enemy, pushes it one hex away, and stuns it.
 // - sightRangeBonus: temporarily increases line of sight by amount.
@@ -61,8 +61,8 @@ window.arcaneMetadata.programs = {
     name: "FOCUS",
     element: "mind",
     requirement: [{ element: "mind", face: 1 }],
-    summary: "Gain 1 temporary Action next turn.",
-    details: "Gain 1 temporary Action on your next turn.",
+    summary: "Gain 1 temporary Execution next turn.",
+    details: "Gain 1 temporary Execution on your next turn.",
     cooldown: 1,
     effect: {
       type: "nextTurnExec",

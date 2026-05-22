@@ -564,8 +564,8 @@ const programs = metadata.programs || {
     name: "FOCUS",
     element: "mind",
     requirement: [{ element: "mind", face: 1 }],
-    summary: "Gain 1 temporary Action next turn.",
-    details: "Spend one common Mind symbol to gain 1 temporary Action on your next turn.",
+    summary: "Gain 1 temporary Execution next turn.",
+    details: "Spend one common Mind symbol to gain 1 temporary Execution on your next turn.",
     cooldown: 1,
     effect: {
       type: "nextTurnExec",
@@ -823,7 +823,7 @@ function getRoomConfigForTier(tier) {
   }
 
   if (normalizedTier === 2) {
-    return { tier, tileCount: 48, threadCount: 2, sigilCount: 2, enemyTypes: buildEnemyRoster(2) };
+    return { tier, tileCount: 48, threadCount: 2, sigilCount: 1, enemyTypes: buildEnemyRoster(2) };
   }
 
   if (normalizedTier === 3) {
@@ -1450,7 +1450,7 @@ function renderRollResultSlots(
   }
 
   if (!selectedRollSlots.length) {
-    return `<p class="roll-empty">Press Cast Sigils to roll all equipped dice.</p>`;
+    return "";
   }
 
   return selectedRollSlots
@@ -1546,8 +1546,8 @@ function markSymbolsSpent(castSymbols, symbolsToSpend) {
   }));
 }
 
-function getActionStatusText(remaining) {
-  return `ACTIONS REMAINING: ${remaining}`;
+function getExecutionStatusText(remaining) {
+  return `EXECUTIONS (ROLLS) REMAINING: ${remaining}`;
 }
 
 function renderRunCharacter(character) {
@@ -1579,9 +1579,9 @@ function renderArtifactStrip(collectedArtifacts) {
   `;
 }
 
-function renderCharacterStats(stats, temporaryActionBonus = 0) {
+function renderCharacterStats(stats, temporaryExecutionBonus = 0) {
   const integrityPercent = Math.max(0, Math.min(100, (stats.integrity / stats.maxIntegrity) * 100));
-  const actionBonus = Math.max(0, temporaryActionBonus);
+  const executionBonus = Math.max(0, temporaryExecutionBonus);
 
   return `
     <dl class="stat-grid" id="character-stats" aria-label="Character stats">
@@ -1591,7 +1591,7 @@ function renderCharacterStats(stats, temporaryActionBonus = 0) {
       </div>
       <div class="stat">
         <dt>Executions</dt>
-        <dd>${stats.exec}</dd>
+        <dd>${stats.exec}${executionBonus ? `<span class="stat-temp-bonus">+${executionBonus}</span>` : ""}</dd>
       </div>
       <div class="stat integrity-stat">
         <dt>Integrity</dt>
@@ -1604,7 +1604,7 @@ function renderCharacterStats(stats, temporaryActionBonus = 0) {
       </div>
       <div class="stat">
         <dt>Actions</dt>
-        <dd>${stats.move}${actionBonus ? `<span class="stat-temp-bonus">+${actionBonus}</span>` : ""}</dd>
+        <dd>${stats.move}</dd>
       </div>
     </dl>
   `;
@@ -2114,8 +2114,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   character.nextTurnExecBonus = character.nextTurnExecBonus || 0;
   let programCooldowns = character.programCooldowns;
   let cooldownLockedProgramIds = new Set();
-  let temporaryActionBonusThisTurn = character.nextTurnExecBonus;
-  actionPointsRemaining = character.stats.move + temporaryActionBonusThisTurn;
+  let temporaryExecutionBonusThisTurn = character.nextTurnExecBonus;
+  let executionRollsRemaining = character.stats.exec + temporaryExecutionBonusThisTurn;
   character.nextTurnExecBonus = 0;
   cooldownLockedProgramIds = new Set(
     Object.entries(programCooldowns)
@@ -2149,7 +2149,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         <section class="runecast-panel inactive" id="runecast-panel" aria-label="Sigil-Casting dice">
           <header class="runecast-header">
             <p class="signal">Sigil-Casting</p>
-            <span id="roll-status">${getActionStatusText(actionPointsRemaining)}</span>
+            <span id="roll-status">${getExecutionStatusText(executionRollsRemaining)}</span>
           </header>
           <div class="roll-options" id="roll-options"></div>
           <div class="roll-results" id="roll-results"></div>
@@ -2172,7 +2172,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         <div class="map-player-info">
           ${renderRunCharacter(character)}
           ${renderArtifactStrip(character.artifacts || [])}
-          ${renderCharacterStats(character.stats, temporaryActionBonusThisTurn + character.nextTurnExecBonus)}
+          ${renderCharacterStats(character.stats, temporaryExecutionBonusThisTurn + character.nextTurnExecBonus)}
           ${renderProgressionTracker(character.progression)}
           ${renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length)}
         </div>
@@ -2250,6 +2250,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       turnNumber,
       characterPositionId,
       actionPointsRemaining,
+      executionRollsRemaining,
       nextTurnExecBonus: character.nextTurnExecBonus,
       programCooldowns: { ...programCooldowns },
       cooldownLockedProgramIds: [...cooldownLockedProgramIds],
@@ -2538,8 +2539,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     });
 
     const execBonus = character.nextTurnExecBonus || 0;
-    temporaryActionBonusThisTurn = execBonus;
-    actionPointsRemaining = character.stats.move + execBonus;
+    temporaryExecutionBonusThisTurn = execBonus;
+    actionPointsRemaining = character.stats.move;
+    executionRollsRemaining = character.stats.exec + temporaryExecutionBonusThisTurn;
     character.nextTurnExecBonus = 0;
     return execBonus;
   }
@@ -2628,7 +2630,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     document.querySelector(".artifact-strip").outerHTML = renderArtifactStrip(character.artifacts || []);
     document.querySelector("#character-stats").outerHTML = renderCharacterStats(
       character.stats,
-      temporaryActionBonusThisTurn + character.nextTurnExecBonus
+      temporaryExecutionBonusThisTurn + character.nextTurnExecBonus
     );
     document.querySelector(".progression-tracker").outerHTML = renderProgressionTracker(character.progression);
     document.querySelector(".thread-tracker").outerHTML = renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length);
@@ -3028,7 +3030,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     rollConfirm.disabled =
       !isRunecastingActive ||
       isRolling ||
-      actionPointsRemaining <= 0 ||
+      executionRollsRemaining <= 0 ||
       (hasRollResults && !selectedRollSlots.length);
   }
 
@@ -3044,6 +3046,25 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
   function hasUsableCastSymbols() {
     return Array.isArray(currentCastSymbols) && currentCastSymbols.some((symbol) => !symbol.spent && !symbol.blank);
+  }
+
+  function finishRunecastingIfNoOptions(statusText = "") {
+    if (
+      !isRunecastingActive ||
+      executionRollsRemaining > 0 ||
+      hasUsableCastSymbols() ||
+      pendingAttack ||
+      isBlinkTargetMode ||
+      pendingSymbolAssignment
+    ) {
+      return false;
+    }
+
+    deactivateRunecasting();
+    if (statusText) {
+      roomStatus.textContent = statusText;
+    }
+    return true;
   }
 
   function resolvePlayerTileEntry() {
@@ -3476,7 +3497,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     currentCastSymbols = null;
     allocatedProgramSymbols = {};
     runecastPanel.classList.add("inactive");
-    rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+    rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
     updateProgramAvailability();
     updateRunecastingPanel();
     updateRoom();
@@ -3488,11 +3509,13 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     }
 
     if (actionPointsRemaining <= 0) {
-      rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+      rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
       gameLog("sigilCast.blocked.noCasts", getRoomDebugState());
       return;
     }
 
+    actionPointsRemaining -= 1;
+    executionRollsRemaining = character.stats.exec + temporaryExecutionBonusThisTurn;
     isRunecastingActive = true;
     isPhysicalTargetMode = false;
     isBlinkTargetMode = false;
@@ -3503,7 +3526,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     allocatedProgramSymbols = {};
     selectedRollSlots.length = 0;
     runecastPanel.classList.remove("inactive");
-    rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+    rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
     updateProgramAvailability();
     updateRunecastingPanel();
     updateRoom();
@@ -3554,7 +3577,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     updateProgramAvailability();
     updateRunecastingPanel();
     updateRoom();
-    rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+    rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
     roomStatus.textContent = status;
   }
 
@@ -3625,8 +3648,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         updateProgramAvailability();
         updateRunecastingPanel();
         updateRoom();
-        rollStatus.textContent = getActionStatusText(actionPointsRemaining);
-        roomStatus.textContent = `${program.name} will add ${execAmount} temporary ${execAmount === 1 ? "action" : "actions"} next turn.`;
+        rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
+        roomStatus.textContent = `${program.name} will add ${execAmount} temporary ${execAmount === 1 ? "Execution" : "Executions"} next turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.nextTurnExecResolved", { programId, execAmount, state: getRoomDebugState() });
         return;
       }
@@ -3679,6 +3703,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         updateRunecastingPanel();
         updateRoom();
         roomStatus.textContent = `${program.name} restored ${healAmount} Integrity.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.rebuildResolved", getRoomDebugState());
         return;
       }
@@ -3702,6 +3727,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         updateRunecastingPanel();
         updateRoom();
         roomStatus.textContent = `${program.name} reset cooldowns on all other programs.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.cooldownsReset", { programId, cooldowns: { ...programCooldowns }, state: getRoomDebugState() });
         return;
       }
@@ -3720,6 +3746,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         updateRunecastingPanel();
         updateRoom();
         roomStatus.textContent = `${program.name} revealed ${temporaryRevealTileIds.size} Rift Thread ${temporaryRevealTileIds.size === 1 ? "hex" : "hexes"} for this turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.riftThreadsRevealed", { programId, revealedTileIds: [...temporaryRevealTileIds], state: getRoomDebugState() });
         return;
       }
@@ -3741,6 +3768,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         updateRunecastingPanel();
         updateRoom();
         roomStatus.textContent = `${program.name} increased sight range by ${bonusAmount} until the end of your next turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.sightRangeBonusResolved", { programId, bonusAmount, playerTurns, state: getRoomDebugState() });
         return;
       }
@@ -3814,6 +3842,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
         damagedEnemies.forEach((item) => showDamageIndicator(item.tileId, item.result.dealtDamage, "enemy"));
         roomStatus.textContent = `${program.name} cost ${selfDamage} Integrity and hit ${damagedEnemies.length} adjacent ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         if (didLevelUp) {
           window.setTimeout(showImmediateLevelReward, 120);
         }
@@ -4108,7 +4137,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       !option ||
       !isRunecastingActive ||
       isRolling ||
-      actionPointsRemaining <= 0 ||
+      executionRollsRemaining <= 0 ||
       !Array.isArray(currentCastSymbols) ||
       !currentCastSymbols.length
     ) {
@@ -4137,7 +4166,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     pendingAttack = null;
     pendingSymbolAssignment = null;
     updateProgramAvailability();
-    rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+    rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
     updateRunecastingPanel();
   });
 
@@ -4150,7 +4179,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       !isRunecastingActive ||
       !slotsToRoll.length ||
       isRolling ||
-      actionPointsRemaining <= 0
+      executionRollsRemaining <= 0
     ) {
       return;
     }
@@ -4158,10 +4187,10 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     gameLog("sigilCast.roll.begin", { selectedRollSlots: [...slotsToRoll], isReroll: hasRollResults, state: getRoomDebugState() });
     selectedRollSlots.length = 0;
     selectedRollSlots.push(...slotsToRoll);
-    actionPointsRemaining -= 1;
+    executionRollsRemaining -= 1;
     isRolling = true;
     rollConfirm.disabled = true;
-    rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+    rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
     updateRunecastingPanel();
     updateRoom({ centerCamera: false });
 
@@ -4210,9 +4239,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
         selectedRollSlots.length = 0;
 
-        if (actionPointsRemaining <= 0 && !hasUsableCastSymbols()) {
+        if (executionRollsRemaining <= 0 && !hasUsableCastSymbols()) {
           deactivateRunecasting();
-          roomStatus.textContent = "No usable sigils rolled. Actions spent for this turn.";
+          roomStatus.textContent = "No usable sigils rolled. Executions spent for this Sigil-Cast.";
           gameLog("sigilCast.autoClosed.noUsableSymbols", {
             selectedRollSlots: [...slotsToRoll],
             finalResults,
@@ -4224,7 +4253,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
         updateProgramAvailability();
         updateRunecastingPanel(finalResults);
-        rollStatus.textContent = getActionStatusText(actionPointsRemaining);
+        rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
         gameLog("sigilCast.roll.complete", {
           selectedRollSlots: [...slotsToRoll],
           finalResults,
@@ -4268,6 +4297,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       updateRoom();
       roomStatus.textContent = entryStatus || "BLINK relocated the Sigilant.";
       finishLevelIfComplete(entryStatus);
+      finishRunecastingIfNoOptions(roomStatus.textContent);
       return;
     }
 
@@ -4293,6 +4323,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         pendingSymbolAssignment = null;
         updateRoom();
         roomStatus.textContent = revealStatus;
+        finishRunecastingIfNoOptions(revealStatus);
         return;
       }
 
@@ -4306,6 +4337,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         pendingSymbolAssignment = null;
         updateRoom();
         roomStatus.textContent = `${targetEnemy.name} defenses reduced by ${reduction}.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("combat.defenseReduced", {
           targetEnemyId: targetEnemy.instanceId,
           reduction,
@@ -4322,6 +4354,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         pendingSymbolAssignment = null;
         updateRoom();
         roomStatus.textContent = `${targetEnemy.name} is confused and will attack another Glitchspawn next turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.enemyConfused", {
           targetEnemyId: targetEnemy.instanceId,
           state: getRoomDebugState(),
@@ -4349,6 +4382,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         pendingSymbolAssignment = null;
         updateRoom();
         roomStatus.textContent = `${targetEnemy.name} was pushed back and stunned for its next turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
         gameLog("program.enemyPushed", {
           targetEnemyId: targetEnemy.instanceId,
           destinationTileId,
@@ -4392,6 +4426,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       updateRoom();
       showDamageIndicator(tileId, dealtDamage, "enemy");
       roomStatus.textContent = damageStatus;
+      finishRunecastingIfNoOptions(damageStatus);
       if (didLevelUp) {
         window.setTimeout(showImmediateLevelReward, 120);
       }
