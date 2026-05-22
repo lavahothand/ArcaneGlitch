@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Arcane Glitch</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell" id="app">
+      <section class="menu-screen" aria-labelledby="game-title">
+        <div class="background-grid" aria-hidden="true"></div>
+        <div class="rune-rain" id="rune-rain" aria-hidden="true"></div>
+        <div class="hex-field" aria-hidden="true">
+          <img src="hex_blank_single_rift.png" alt="">
+          <img src="hex_blank_powerhub.png" alt="">
+          <img src="hex_blank_cache.png" alt="">
+          <img src="hex_basic.png" alt="">
+        </div>
+
+        <div class="menu-content">
+          <p class="signal">Q-Dara Haven Interface</p>
+          <h1 id="game-title">Arcane Glitch</h1>
+          <p class="tagline">Bind the Rift. Rewrite the broken world.</p>
+          <button class="primary-action" id="start-run" type="button">
+            Start Run
+          </button>
+        </div>
+
+        <div class="rune-strip" aria-hidden="true">
+          <img src="runecode_mind_1.png" alt="">
+          <img src="runecode_surge_1.png" alt="">
+          <img src="runecode_void_1.png" alt="">
+          <img src="runecode_life_2.png" alt="">
+        </div>
+      </section>
+    </main>
+
+    <script src="metadata/glitchspawn.js"></script>
+    <script src="metadata/programs.js"></script>
+    <script src="metadata/artifacts.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
