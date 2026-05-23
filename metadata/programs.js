@@ -8,7 +8,7 @@
 // - resetOtherCooldowns: clears cooldowns on all other equipped programs.
 // - healIntegrity: restores Integrity by amount.
 // - blinkStraight: teleports exactly distance spaces in a straight line.
-// - nextTurnExec: adds amount temporary Executions to the next player turn.
+// - nextTurnExec: adds amount temporary Executions to the next player turn. Optional currentAmount adds Executions immediately.
 // - revealRiftThreads: temporarily reveals Rift Thread hexes.
 // - pushEnemy: targets an adjacent enemy, pushes it one hex away, and stuns it.
 // - sightRangeBonus: temporarily increases line of sight by amount.
@@ -21,12 +21,12 @@ window.arcaneMetadata.programs = {
     name: "BLINK",
     element: "void",
     requirement: [{ element: "void", face: 1 }],
-    summary: "Move 2 spaces in a straight line.",
-    details: "Teleport exactly 2 hex spaces in a single straight-line direction.",
+    summary: "Move 3 spaces in a straight line.",
+    details: "Teleport exactly 3 hex spaces in a single straight-line direction.",
     cooldown: 0,
     effect: {
       type: "blinkStraight",
-      distance: 2,
+      distance: 3,
     },
   },
   spark: {
@@ -34,13 +34,15 @@ window.arcaneMetadata.programs = {
     name: "SPARK",
     element: "surge",
     requirement: [{ element: "surge", face: 1 }],
-    summary: "Deal 1 AD to an adjacent enemy.",
-    details: "Deal 1 Arcane Damage to an adjacent enemy.",
+    summary: "Deal 2 PD 2 spaces away.",
+    details: "Deal 2 Physical Damage to an enemy exactly 2 spaces away in a straight line.",
     cooldown: 1,
     effect: {
-      type: "damageAdjacent",
-      amount: 1,
-      damageType: "arcane",
+      type: "damageLine",
+      amount: 2,
+      damageType: "physical",
+      distance: 2,
+      revealTarget: true,
     },
   },
   rebuild: {
@@ -61,12 +63,13 @@ window.arcaneMetadata.programs = {
     name: "FOCUS",
     element: "mind",
     requirement: [{ element: "mind", face: 1 }],
-    summary: "Gain 1 temporary Execution next turn.",
-    details: "Gain 1 temporary Execution on your next turn.",
+    summary: "Gain 1 Execution now and next turn.",
+    details: "Gain 1 temporary Execution for the current Sigil-Cast and 1 temporary Execution on your next turn.",
     cooldown: 1,
     effect: {
       type: "nextTurnExec",
       amount: 1,
+      currentAmount: 1,
     },
   },
   quake: {
@@ -75,10 +78,10 @@ window.arcaneMetadata.programs = {
     element: "surge",
     requirement: [
       { element: "surge", face: 1 },
-      { element: "life", face: 2 },
+      { element: "life", face: 1 },
     ],
     summary: "Deal 1 PD 2 spaces away.",
-    details: "Spend one common Surge and one uncommon Life symbol to target a hex 2 spaces away in a straight line. Valid target spaces are temporarily revealed while aiming.",
+    details: "Spend one common Surge and one common Life symbol to target a hex 2 spaces away in a straight line. Valid target spaces are temporarily revealed while aiming.",
     cooldown: 2,
     effect: {
       type: "damageLine",
@@ -94,10 +97,10 @@ window.arcaneMetadata.programs = {
     element: "mind",
     requirement: [
       { element: "mind", face: 1 },
-      { element: "surge", face: 2 },
+      { element: "surge", face: 1 },
     ],
     summary: "Reduce enemy defenses by 1.",
-    details: "Spend one common Mind and one uncommon Surge symbol to reduce an adjacent enemy's Physical Defense and Arcane Defense by 1.",
+    details: "Spend one common Mind and one common Surge symbol to reduce an adjacent enemy's Physical Defense and Arcane Defense by 1.",
     cooldown: 1,
     effect: {
       type: "debuffDefense",
@@ -110,14 +113,14 @@ window.arcaneMetadata.programs = {
     element: "surge",
     requirement: [
       { element: "surge", face: 1 },
-      { element: "void", face: 2 },
+      { element: "void", face: 1 },
     ],
-    summary: "Teleport 3 spaces in a straight line.",
-    details: "Spend one common Surge and one uncommon Void symbol to teleport exactly 3 hex spaces in a straight-line direction.",
+    summary: "Teleport 4 spaces in a straight line.",
+    details: "Spend one common Surge and one common Void symbol to teleport exactly 4 hex spaces in a straight-line direction.",
     cooldown: 1,
     effect: {
       type: "blinkStraight",
-      distance: 3,
+      distance: 4,
     },
   },
   drain: {
@@ -126,10 +129,10 @@ window.arcaneMetadata.programs = {
     element: "life",
     requirement: [
       { element: "life", face: 1 },
-      { element: "mind", face: 2 },
+      { element: "mind", face: 1 },
     ],
     summary: "Deal 1 AD and heal 1 Integrity.",
-    details: "Spend one common Life and one uncommon Mind symbol to deal 1 Arcane Damage to an adjacent enemy, then heal 1 Integrity.",
+    details: "Spend one common Life and one common Mind symbol to deal 1 Arcane Damage to an adjacent enemy, then heal 1 Integrity.",
     cooldown: 2,
     effect: {
       type: "damageAdjacent",
@@ -144,10 +147,10 @@ window.arcaneMetadata.programs = {
     element: "mind",
     requirement: [
       { element: "mind", face: 1 },
-      { element: "void", face: 2 },
+      { element: "void", face: 1 },
     ],
     summary: "Enemy attacks another enemy next turn.",
-    details: "Spend one common Mind and one uncommon Void symbol to make an adjacent enemy attack another enemy next turn instead of the player.",
+    details: "Spend one common Mind and one common Void symbol to make an adjacent enemy attack another enemy next turn instead of the player.",
     cooldown: 1,
     effect: {
       type: "confuseEnemy",
@@ -160,10 +163,10 @@ window.arcaneMetadata.programs = {
     element: "void",
     requirement: [
       { element: "void", face: 1 },
-      { element: "life", face: 2 },
+      { element: "life", face: 1 },
     ],
     summary: "Reset all other program cooldowns.",
-    details: "Spend one common Void and one uncommon Life symbol to clear cooldowns on all other equipped programs.",
+    details: "Spend one common Void and one common Life symbol to clear cooldowns on all other equipped programs.",
     cooldown: 1,
     effect: {
       type: "resetOtherCooldowns",
@@ -175,10 +178,10 @@ window.arcaneMetadata.programs = {
     element: "void",
     requirement: [
       { element: "void", face: 1 },
-      { element: "void", face: 2 },
+      { element: "void", face: 1 },
     ],
     summary: "Reveal Rift Threads this turn.",
-    details: "Spend one common Void and one uncommon Void symbol to reveal all Rift Thread hexes until the turn ends.",
+    details: "Spend two common Void symbols to reveal all Rift Thread hexes until the turn ends.",
     cooldown: 1,
     effect: {
       type: "revealRiftThreads",
@@ -190,14 +193,14 @@ window.arcaneMetadata.programs = {
     element: "surge",
     requirement: [
       { element: "surge", face: 1 },
-      { element: "surge", face: 2 },
+      { element: "surge", face: 1 },
     ],
-    summary: "Deal 2 AD to an adjacent enemy.",
-    details: "Spend one common Surge and one uncommon Surge symbol to deal 2 Arcane Damage to an adjacent enemy.",
+    summary: "Deal 3 AD to an adjacent enemy.",
+    details: "Spend two common Surge symbols to deal 3 Arcane Damage to an adjacent enemy.",
     cooldown: 2,
     effect: {
       type: "damageAdjacent",
-      amount: 2,
+      amount: 3,
       damageType: "arcane",
     },
   },
@@ -207,10 +210,10 @@ window.arcaneMetadata.programs = {
     element: "life",
     requirement: [
       { element: "life", face: 1 },
-      { element: "life", face: 2 },
+      { element: "life", face: 1 },
     ],
     summary: "Push and stun an adjacent enemy.",
-    details: "Spend one common Life and one uncommon Life symbol to move an adjacent enemy one hex away and stun it for its next turn.",
+    details: "Spend two common Life symbols to move an adjacent enemy one hex away and stun it for its next turn.",
     cooldown: 1,
     effect: {
       type: "pushEnemy",
@@ -223,10 +226,10 @@ window.arcaneMetadata.programs = {
     element: "mind",
     requirement: [
       { element: "mind", face: 1 },
-      { element: "mind", face: 2 },
+      { element: "mind", face: 1 },
     ],
     summary: "Increase sight range by 1.",
-    details: "Spend one common Mind and one uncommon Mind symbol to increase line of sight by 1 until the end of your next turn.",
+    details: "Spend two common Mind symbols to increase line of sight by 1 until the end of your next turn.",
     cooldown: 1,
     effect: {
       type: "sightRangeBonus",

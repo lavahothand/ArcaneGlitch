@@ -34,7 +34,7 @@ The metadata files are JavaScript text files loaded before `main.js` so the game
   - `resetOtherCooldowns`: clears cooldowns on all other equipped programs.
   - `healIntegrity`: restores Integrity by `amount`.
   - `blinkStraight`: teleports exactly `distance` spaces in a straight line.
-  - `nextTurnExec`: adds `amount` temporary Executions on the next player turn.
+  - `nextTurnExec`: adds `amount` temporary Executions on the next player turn. Optional `currentAmount` adds temporary Executions immediately.
   - `revealRiftThreads`: temporarily reveals all uncollected Rift Thread hexes.
   - `pushEnemy`: targets an adjacent enemy, pushes it one hex away, and applies `stunTurns`.
   - `sightRangeBonus`: increases line of sight by `amount` for `playerTurns`.
@@ -182,22 +182,27 @@ The Void transparent image mapping is intentionally remapped in `dice.void.files
 
 ## Room Scaling
 
-Rooms are exploration + Thread Hunt rooms. The player must collect all Rift Threads before closing the Rift. Tier 1 is a no-enemy onboarding room. Later rooms add Glitchspawn as threats and XP sources, but they do not need to be defeated to close the room. Thread count, enemy count, Sigil pickups, and room size scale with room progression.
+Rooms are exploration + Thread Hunt rooms. The player must collect all Rift Threads before closing the Rift. Tier 1 is a no-enemy onboarding room. Later rooms add Glitchspawn as threats and XP sources, but they do not need to be defeated to close the room. Thread count, enemy count, and room size scale with room progression. Each level places one Sigil pickup, with the node's Sigil Occurrence Percentages controlling which sigil drops.
 
 | Room Tier | Hex Tiles | Rift Threads | Sigils | Enemies |
 |-----------|-----------|--------------|--------|---------|
 | 1         | 30        | 1            | 1      | 1 stationary |
 | 2         | 48        | 2            | 1      | 2       |
-| 3         | 60        | 2            | 2      | 3       |
-| 4         | 72        | 3            | 3      | 4       |
-| 5         | 84        | 4            | 3      | 5       |
-| 6         | 96        | 4            | 4      | 6       |
-| 7+        | up to 120 | up to 6      | up to 5| up to 9 |
+| 3         | 60        | 2            | 1      | 3       |
+| 4         | 72        | 3            | 1      | 4       |
+| 5         | 84        | 4            | 1      | 5       |
+| 6         | 96        | 4            | 1      | 6       |
+| 7+        | up to 120 | up to 6      | 1      | up to 9 |
 
 - Enemies are placed on or near the Rift tile at room start.
 - Additional threads are distributed across non-Rift, non-start border tiles.
 - Room tier is determined by the node's position on the Level Map, not the player's level.
 - Cache tiles do not appear in Tier 1. Cache tiles and artifact pickups appear in Tier 2+ rooms.
+- Room shapes vary by realm:
+  - Cindera favors wide, dense clusters with fewer hallway-like one-off tiles.
+  - Parcel 7 favors multi-hex islands separated by one-hex gaps that require BLINK-style traversal.
+  - The Conclave favors ordered 2-hex and 3-hex-wide horizontal or vertical hallways.
+  - Sestra Jungle favors meandering paths with unfilled hex gaps acting as blockers.
 
 ## Camera
 
@@ -300,21 +305,21 @@ Current artifact pool:
   - three or more matching symbols: 5 physical damage
 
 Implemented program effects:
-- `SPARK`: consumes one common Surge symbol, targets an adjacent enemy, and deals arcane damage minus Arcane Defense.
+- `SPARK`: consumes one common Surge symbol, targets a hex exactly 2 spaces away in a straight line, and deals 2 physical damage minus Physical Defense if an enemy is there.
 - `REBUILD`: consumes one common Life symbol and restores 1 Integrity immediately.
-- `BLINK`: consumes one common Void symbol, then targets a connected hex exactly 2 spaces away in a straight line and teleports there.
-- `QUAKE`: consumes one common Surge and one uncommon Life symbol, temporarily reveals all valid target hexes 2 spaces away in a straight line while aiming, and deals 1 physical damage if an enemy is there.
-- `SHATTER`: consumes one common Mind and one uncommon Surge symbol, then reduces an adjacent enemy's Physical Defense and Arcane Defense by 1.
-- `BLINK II`: consumes one common Surge and one uncommon Void symbol, then teleports exactly 3 spaces in a straight line.
-- `DRAIN`: consumes one common Life and one uncommon Mind symbol, deals 1 arcane damage to an adjacent enemy, then heals 1 Integrity.
-- `CONFUSE`: consumes one common Mind and one uncommon Void symbol, then makes an adjacent enemy attack another Glitchspawn on its next turn instead of the player.
-- `FORTIFY`: consumes one common Void and one uncommon Life symbol, then clears cooldowns on all other equipped programs.
-- `RIFT`: consumes one common Void and one uncommon Void symbol, then reveals all uncollected Rift Thread hexes for the current turn.
-- `BOLT`: consumes one common Surge and one uncommon Surge symbol, then deals 2 arcane damage to an adjacent enemy.
-- `PUSH`: consumes one common Life and one uncommon Life symbol, then pushes an adjacent enemy one hex away and stuns it for its next turn.
-- `VISION`: consumes one common Mind and one uncommon Mind symbol, then increases line of sight by 1 until the end of the next player turn.
+- `BLINK`: consumes one common Void symbol, then targets a connected hex exactly 3 spaces away in a straight line and teleports there.
+- `QUAKE`: consumes one common Surge and one common Life symbol, temporarily reveals all valid target hexes 2 spaces away in a straight line while aiming, and deals 1 physical damage if an enemy is there.
+- `SHATTER`: consumes one common Mind and one common Surge symbol, then reduces an adjacent enemy's Physical Defense and Arcane Defense by 1.
+- `BLINK II`: consumes one common Surge and one common Void symbol, then teleports exactly 4 spaces in a straight line.
+- `DRAIN`: consumes one common Life and one common Mind symbol, deals 1 arcane damage to an adjacent enemy, then heals 1 Integrity.
+- `CONFUSE`: consumes one common Mind and one common Void symbol, then makes an adjacent enemy attack another Glitchspawn on its next turn instead of the player.
+- `FORTIFY`: consumes one common Void and one common Life symbol, then clears cooldowns on all other equipped programs.
+- `RIFT`: consumes two common Void symbols, then reveals all uncollected Rift Thread hexes for the current turn.
+- `BOLT`: consumes two common Surge symbols, then deals 3 arcane damage to an adjacent enemy.
+- `PUSH`: consumes two common Life symbols, then pushes an adjacent enemy one hex away and stuns it for its next turn.
+- `VISION`: consumes two common Mind symbols, then increases line of sight by 1 until the end of the next player turn.
 - `Physical Damage`: consumes one or more symbols based on the best matching group, targets an adjacent enemy, and deals physical damage minus Physical Defense.
-- `FOCUS`: consumes one common Mind symbol and adds 1 temporary Execution to the next player turn.
+- `FOCUS`: consumes one common Mind symbol, adds 1 temporary Execution to the current Sigil-Cast, and adds 1 temporary Execution to the next player turn.
 
 ## Enemies
 

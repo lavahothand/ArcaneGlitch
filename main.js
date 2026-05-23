@@ -524,12 +524,12 @@ const programs = metadata.programs || {
     name: "BLINK",
     element: "void",
     requirement: [{ element: "void", face: 1 }],
-    summary: "Move 2 spaces in a straight line.",
-    details: "Teleport exactly 2 hex spaces in a single straight-line direction.",
+    summary: "Move 3 spaces in a straight line.",
+    details: "Teleport exactly 3 hex spaces in a single straight-line direction.",
     cooldown: 0,
     effect: {
       type: "blinkStraight",
-      distance: 2,
+      distance: 3,
     },
   },
   spark: {
@@ -537,13 +537,15 @@ const programs = metadata.programs || {
     name: "SPARK",
     element: "surge",
     requirement: [{ element: "surge", face: 1 }],
-    summary: "Deal 2 AD to an adjacent enemy.",
-    details: "Surge program. Spend one common Surge symbol to deal 2 arcane damage to an adjacent enemy.",
+    summary: "Deal 2 PD 2 spaces away.",
+    details: "Surge program. Spend one common Surge symbol to deal 2 physical damage to an enemy exactly 2 spaces away in a straight line.",
     cooldown: 1,
     effect: {
-      type: "damageAdjacent",
+      type: "damageLine",
       amount: 2,
-      damageType: "arcane",
+      damageType: "physical",
+      distance: 2,
+      revealTarget: true,
     },
   },
   rebuild: {
@@ -564,12 +566,13 @@ const programs = metadata.programs || {
     name: "FOCUS",
     element: "mind",
     requirement: [{ element: "mind", face: 1 }],
-    summary: "Gain 1 temporary Execution next turn.",
-    details: "Spend one common Mind symbol to gain 1 temporary Execution on your next turn.",
+    summary: "Gain 1 Execution now and next turn.",
+    details: "Spend one common Mind symbol to gain 1 temporary Execution for the current Sigil-Cast and 1 temporary Execution on your next turn.",
     cooldown: 1,
     effect: {
       type: "nextTurnExec",
       amount: 1,
+      currentAmount: 1,
     },
   },
 };
@@ -712,11 +715,11 @@ const roomDirections = [
 
 const roomTileAssets = {
   basic: "hex_basic.png",
-  cache: "hex_blank_cache.png",
+  cache: "hexes/hex_cache.png",
   haven: "hexes/haven_hex_active.png",
   havenInactive: "hexes/haven_hex_deactive.png",
-  powerHub: "hex_blank_powerhub.png",
-  powerHubOff: "hex_blank_powerhub_off.png",
+  powerHub: "hexes/hex_powerhub.png",
+  powerHubOff: "hexes/hex_powerhub_off.png",
   rift: "hexes/rift_hex.png",
   hidden: "hex_hidden.png",
 };
@@ -827,32 +830,275 @@ function getRoomConfigForTier(tier) {
   }
 
   if (normalizedTier === 3) {
-    return { tier, tileCount: 60, threadCount: 2, sigilCount: 2, enemyTypes: buildEnemyRoster(3) };
+    return { tier, tileCount: 60, threadCount: 2, sigilCount: 1, enemyTypes: buildEnemyRoster(3) };
   }
 
   if (normalizedTier === 4) {
-    return { tier, tileCount: 72, threadCount: 3, sigilCount: 3, enemyTypes: buildEnemyRoster(4) };
+    return { tier, tileCount: 72, threadCount: 3, sigilCount: 1, enemyTypes: buildEnemyRoster(4) };
   }
 
   if (normalizedTier === 5) {
-    return { tier, tileCount: 84, threadCount: 4, sigilCount: 3, enemyTypes: buildEnemyRoster(5) };
+    return { tier, tileCount: 84, threadCount: 4, sigilCount: 1, enemyTypes: buildEnemyRoster(5) };
   }
 
   if (normalizedTier === 6) {
-    return { tier, tileCount: 96, threadCount: 4, sigilCount: 4, enemyTypes: buildEnemyRoster(6) };
+    return { tier, tileCount: 96, threadCount: 4, sigilCount: 1, enemyTypes: buildEnemyRoster(6) };
   }
 
   return {
     tier,
     tileCount: Math.min(120, 96 + (normalizedTier - 6) * 8),
     threadCount: Math.min(6, 4 + Math.floor((normalizedTier - 5) / 2)),
-    sigilCount: Math.min(5, 4 + Math.floor((normalizedTier - 6) / 2)),
+    sigilCount: 1,
     enemyTypes: buildEnemyRoster(Math.min(9, normalizedTier)),
   };
 }
 
 function getRandomFromPool(pool) {
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function createRoomTileCoords(tileCount, levelNode = null) {
+  const zoneId = levelNode?.zoneId || "default";
+
+  if (zoneId === "cindera") {
+    return createClusteredRoomCoords(tileCount);
+  }
+
+  if (zoneId === "conclave") {
+    return createOrderedRoomCoords(tileCount);
+  }
+
+  if (zoneId === "parcel7") {
+    return createIslandRoomCoords(tileCount);
+  }
+
+  if (zoneId === "sestra") {
+    return createMeanderingRoomCoords(tileCount);
+  }
+
+  return createDefaultRoomCoords(tileCount);
+}
+
+function createDefaultRoomCoords(tileCount) {
+  const coords = [{ q: 0, r: 0 }];
+  const occupied = new Set([tileKey(0, 0)]);
+
+  while (coords.length < tileCount) {
+    const anchor = coords[Math.floor(Math.random() * coords.length)];
+    const candidates = getNeighborCoords(anchor).filter((coord) => !occupied.has(tileKey(coord.q, coord.r)));
+
+    if (!candidates.length) {
+      continue;
+    }
+
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
+    coords.push(next);
+    occupied.add(tileKey(next.q, next.r));
+  }
+
+  return coords;
+}
+
+function getRoomCoordDistance(coord) {
+  return (Math.abs(coord.q) + Math.abs(coord.r) + Math.abs(coord.q - coord.r)) / 2;
+}
+
+function countOccupiedNeighborCoords(coord, occupied) {
+  return getNeighborCoords(coord).filter((neighbor) => occupied.has(tileKey(neighbor.q, neighbor.r))).length;
+}
+
+function addRoomCoord(coords, occupied, coord) {
+  const key = tileKey(coord.q, coord.r);
+
+  if (occupied.has(key)) {
+    return false;
+  }
+
+  coords.push({ q: coord.q, r: coord.r });
+  occupied.add(key);
+  return true;
+}
+
+function fillRoomCoordsFromFrontier(coords, occupied, tileCount, scoreCandidate) {
+  let guard = 0;
+
+  while (coords.length < tileCount && guard < tileCount * 80) {
+    guard += 1;
+    const candidateMap = new Map();
+
+    coords.forEach((coord) => {
+      getNeighborCoords(coord).forEach((neighbor) => {
+        const key = tileKey(neighbor.q, neighbor.r);
+
+        if (!occupied.has(key)) {
+          candidateMap.set(key, neighbor);
+        }
+      });
+    });
+
+    const candidates = [...candidateMap.values()];
+
+    if (!candidates.length) {
+      break;
+    }
+
+    candidates.sort((a, b) => scoreCandidate(b, occupied) - scoreCandidate(a, occupied));
+    addRoomCoord(coords, occupied, candidates[0]);
+  }
+}
+
+function createClusteredRoomCoords(tileCount) {
+  const coords = [{ q: 0, r: 0 }];
+  const occupied = new Set([tileKey(0, 0)]);
+
+  fillRoomCoordsFromFrontier(coords, occupied, tileCount, (candidate, currentOccupied) => {
+    const screenX = candidate.q - candidate.r * 0.5;
+    return countOccupiedNeighborCoords(candidate, currentOccupied) * 12 + Math.abs(screenX) * 0.35 - Math.abs(candidate.r) * 0.18 + Math.random() * 4;
+  });
+
+  return coords.length >= tileCount ? coords : createDefaultRoomCoords(tileCount);
+}
+
+function createOrderedRoomCoords(tileCount) {
+  const coords = [{ q: 0, r: 0 }];
+  const occupied = new Set([tileKey(0, 0)]);
+  const horizontal = Math.random() < 0.58;
+  const hallwayWidth = Math.random() < 0.62 ? 2 : 3;
+  const segmentCount = Math.max(2, Math.min(4, Math.round(tileCount / 28)));
+  const length = Math.ceil(tileCount / hallwayWidth / segmentCount) + 4;
+  const laneStart = -Math.floor(hallwayWidth / 2);
+  const lineStart = -Math.floor(length / 2);
+
+  for (let segment = 0; segment < segmentCount && coords.length < tileCount; segment += 1) {
+    const segmentHorizontal = segment % 2 === 0 ? horizontal : !horizontal;
+    const segmentOffset = segment - Math.floor(segmentCount / 2);
+    const qOffset = horizontal ? 0 : segmentOffset * Math.max(4, hallwayWidth + 2);
+    const rOffset = horizontal ? segmentOffset * Math.max(4, hallwayWidth + 2) : 0;
+
+    for (let lane = 0; lane < hallwayWidth && coords.length < tileCount; lane += 1) {
+      for (let step = 0; step < length && coords.length < tileCount; step += 1) {
+        const q = segmentHorizontal ? lineStart + step + qOffset : laneStart + lane + qOffset;
+        const r = segmentHorizontal ? laneStart + lane + rOffset : lineStart + step + rOffset;
+        addRoomCoord(coords, occupied, { q, r });
+      }
+    }
+  }
+
+  fillRoomCoordsFromFrontier(coords, occupied, tileCount, (candidate, currentOccupied) =>
+    countOccupiedNeighborCoords(candidate, currentOccupied) * 5 - getRoomCoordDistance(candidate) * 0.14 + Math.random() * 2
+  );
+
+  return coords;
+}
+
+function addIslandCluster(coords, occupied, center, maxSize, blockedKeys = new Set()) {
+  const cluster = [];
+
+  if (!blockedKeys.has(tileKey(center.q, center.r)) && addRoomCoord(coords, occupied, center)) {
+    cluster.push(center);
+  }
+
+  let guard = 0;
+  while (cluster.length < maxSize && guard < maxSize * 24) {
+    guard += 1;
+    const anchor = cluster[Math.floor(Math.random() * cluster.length)] || center;
+    const candidates = getNeighborCoords(anchor).filter((coord) => {
+      const key = tileKey(coord.q, coord.r);
+      return !occupied.has(key) && !blockedKeys.has(key);
+    });
+
+    if (!candidates.length) {
+      continue;
+    }
+
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
+    addRoomCoord(coords, occupied, next);
+    cluster.push(next);
+  }
+}
+
+function createIslandRoomCoords(tileCount) {
+  const coords = [];
+  const occupied = new Set();
+  let currentCenter = { q: 0, r: 0 };
+  let islandSize = Math.min(9, Math.max(6, Math.round(tileCount / 8)));
+
+  addIslandCluster(coords, occupied, currentCenter, islandSize);
+
+  let guard = 0;
+
+  while (coords.length < tileCount && guard < tileCount * 20) {
+    guard += 1;
+    const direction = roomDirections[Math.floor(Math.random() * roomDirections.length)];
+    const edge = [...coords]
+      .sort((a, b) => (b.q * direction.q + b.r * direction.r) - (a.q * direction.q + a.r * direction.r))[0] || currentCenter;
+    const gapOne = { q: edge.q + direction.q, r: edge.r + direction.r };
+    const center = { q: edge.q + direction.q * 2, r: edge.r + direction.r * 2 };
+    const remaining = tileCount - coords.length;
+    const blockedKeys = new Set([tileKey(gapOne.q, gapOne.r)]);
+
+    islandSize = Math.min(remaining, 5 + Math.floor(Math.random() * 6));
+    addIslandCluster(coords, occupied, center, islandSize, blockedKeys);
+    currentCenter = center;
+
+    if (islandSize <= 0) {
+      break;
+    }
+  }
+
+  return coords.length >= tileCount ? coords.slice(0, tileCount) : createDefaultRoomCoords(tileCount);
+}
+
+function createMeanderingRoomCoords(tileCount) {
+  const coords = [{ q: 0, r: 0 }];
+  const occupied = new Set([tileKey(0, 0)]);
+  let current = coords[0];
+  let directionIndex = Math.floor(Math.random() * roomDirections.length);
+  let guard = 0;
+
+  while (coords.length < tileCount && guard < tileCount * 120) {
+    guard += 1;
+
+    if (Math.random() < 0.38) {
+      directionIndex = (directionIndex + (Math.random() < 0.5 ? 1 : -1) + roomDirections.length) % roomDirections.length;
+    }
+
+    const preferredDirections = [
+      roomDirections[directionIndex],
+      roomDirections[(directionIndex + 1) % roomDirections.length],
+      roomDirections[(directionIndex + roomDirections.length - 1) % roomDirections.length],
+      ...[...roomDirections].sort(() => Math.random() - 0.5),
+    ];
+    const nextDirection = preferredDirections.find((direction) => {
+      const candidate = { q: current.q + direction.q, r: current.r + direction.r };
+      return !occupied.has(tileKey(candidate.q, candidate.r)) && countOccupiedNeighborCoords(candidate, occupied) <= 2;
+    });
+
+    if (!nextDirection) {
+      current = coords[Math.floor(Math.random() * coords.length)];
+      continue;
+    }
+
+    const next = { q: current.q + nextDirection.q, r: current.r + nextDirection.r };
+    addRoomCoord(coords, occupied, next);
+    current = next;
+
+    if (coords.length < tileCount && Math.random() < 0.3) {
+      const branchCandidates = getNeighborCoords(current).filter((coord) => !occupied.has(tileKey(coord.q, coord.r)) && countOccupiedNeighborCoords(coord, occupied) <= 2);
+      const branch = branchCandidates[Math.floor(Math.random() * branchCandidates.length)];
+
+      if (branch) {
+        addRoomCoord(coords, occupied, branch);
+      }
+    }
+  }
+
+  fillRoomCoordsFromFrontier(coords, occupied, tileCount, (candidate, currentOccupied) =>
+    (countOccupiedNeighborCoords(candidate, currentOccupied) <= 2 ? 8 : -8) - getRoomCoordDistance(candidate) * 0.05 + Math.random() * 3
+  );
+
+  return coords;
 }
 
 function applyRoomTileTheme(roomTiles, levelNode) {
@@ -885,28 +1131,14 @@ function getRoomTileImage(tile, isRevealed) {
 
 function generateRoomTiles(roomConfig = getRoomConfigForTier(1), levelNode = null) {
   const tileCount = roomConfig.tileCount;
-  const tiles = [{ id: "tile-0", q: 0, r: 0, type: "basic" }];
-  const occupied = new Set([tileKey(0, 0)]);
-
-  while (tiles.length < tileCount) {
-    const anchor = tiles[Math.floor(Math.random() * tiles.length)];
-    const candidates = getNeighborCoords(anchor).filter((coord) => !occupied.has(tileKey(coord.q, coord.r)));
-
-    if (!candidates.length) {
-      continue;
-    }
-
-    const next = candidates[Math.floor(Math.random() * candidates.length)];
-    const isStartingTile = next.q === 0 && next.r === 0;
-
-    tiles.push({
-      id: `tile-${tiles.length}`,
-      q: next.q,
-      r: next.r,
-      type: isStartingTile ? "basic" : "basic",
-    });
-    occupied.add(tileKey(next.q, next.r));
-  }
+  const roomCoords = createRoomTileCoords(tileCount, levelNode);
+  const tiles = roomCoords.map((coord, index) => ({
+    id: `tile-${index}`,
+    q: coord.q,
+    r: coord.r,
+    type: "basic",
+  }));
+  const occupied = new Set(tiles.map((tile) => tileKey(tile.q, tile.r)));
 
   const riftCandidates = tiles
     .filter((tile) => tile.id !== "tile-0")
@@ -1428,7 +1660,6 @@ function renderRollResultSlots(
 
     return visibleSymbols
       .map((symbol) => {
-        const die = symbol.blank ? null : getDieById(symbol.element);
         const rollingResultIndex = selectedRollSlots.indexOf(symbol.slotIndex);
         const rollingResult = rollingResultIndex >= 0 && results[rollingResultIndex] ? results[rollingResultIndex] : null;
         const displaySymbol = rollingResult
@@ -1436,13 +1667,15 @@ function renderRollResultSlots(
             ? { element: rollingResult.sigil.element, face: rollingResult.sigil.face }
             : { blank: true }
           : symbol;
+        const displayDie = displaySymbol.blank ? null : getDieById(displaySymbol.element);
         const isAssignable = assignableResultIndices.has(symbol.resultIndex);
+        const isRollingSlot = rollingResultIndex >= 0;
 
         return `
-          <div class="roll-result ${isAssignable ? "assignable" : ""} ${displaySymbol.blank ? "blank-result" : ""}" data-result-index="${symbol.resultIndex}" style="--die-accent: ${displaySymbol.blank ? getLoadoutDieAccent(character.loadout[symbol.slotIndex]) : die.accent}">
+          <div class="roll-result ${isAssignable ? "assignable" : ""} ${isRollingSlot ? "rolling" : ""} ${displaySymbol.blank ? "blank-result" : ""}" data-result-index="${symbol.resultIndex}" style="--die-accent: ${displaySymbol.blank ? getLoadoutDieAccent(character.loadout[symbol.slotIndex]) : displayDie.accent}">
             <span>Die ${symbol.slotIndex + 1}</span>
             ${renderSigilDieImage(displaySymbol, "result")}
-            <strong>${displaySymbol.blank ? "Blank" : die.name}</strong>
+            <strong>${displaySymbol.blank ? "Blank" : displayDie.name}</strong>
           </div>
         `;
       })
@@ -1841,13 +2074,13 @@ function getLineTargetTileIds(roomTiles, positionId, distance, occupiedTileIds =
       const target = roomTiles.find((tile) => tile.q === targetQ && tile.r === targetR);
       const hasConnectedPath = pathKeys.every((pathKey) => roomTiles.some((tile) => tileKey(tile.q, tile.r) === pathKey));
 
-      return hasConnectedPath && target && (options.allowOccupied || !occupied.has(target.id)) ? target.id : null;
+      return (options.allowGaps || hasConnectedPath) && target && (options.allowOccupied || !occupied.has(target.id)) ? target.id : null;
     })
     .filter(Boolean);
 }
 
 function getBlinkTargetTileIds(roomTiles, positionId, occupiedTileIds = [], distance = 2) {
-  return getLineTargetTileIds(roomTiles, positionId, distance, occupiedTileIds);
+  return getLineTargetTileIds(roomTiles, positionId, distance, occupiedTileIds, { allowGaps: true });
 }
 
 function getPushDestinationTileId(roomTiles, playerPositionId, enemyPositionId, occupiedTileIds = []) {
@@ -2830,7 +3063,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       updateRoom();
       let turnStatus = "Glitchspawn turn skipped. Area remains secured.";
       if (execBonus > 0) {
-        turnStatus += ` FOCUS adds ${execBonus} temporary ${execBonus === 1 ? "action" : "actions"} this turn.`;
+        turnStatus += ` FOCUS adds ${execBonus} temporary ${execBonus === 1 ? "Execution" : "Executions"} this turn.`;
       }
       if (cooldownLockedProgramIds.size) {
         turnStatus += ` ${[...cooldownLockedProgramIds].map((programId) => getProgramById(programId)?.name || programId).join(", ")} ${cooldownLockedProgramIds.size === 1 ? "is" : "are"} cooling down.`;
@@ -2990,7 +3223,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       window.setTimeout(showAllDerezzedNotice, didConfuseLevelUp ? 260 : 120);
     }
     if (execBonus > 0) {
-      turnStatus += ` FOCUS adds ${execBonus} temporary ${execBonus === 1 ? "action" : "actions"} this turn.`;
+      turnStatus += ` FOCUS adds ${execBonus} temporary ${execBonus === 1 ? "Execution" : "Executions"} this turn.`;
     }
     if (cooldownLockedProgramIds.size) {
       turnStatus += ` ${[...cooldownLockedProgramIds].map((programId) => getProgramById(programId)?.name || programId).join(", ")} ${cooldownLockedProgramIds.size === 1 ? "is" : "are"} cooling down.`;
@@ -3236,61 +3469,63 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
   function showSigilPickupChoice(pickup) {
     const sigil = getSigilDefinition(pickup.sigil.element, pickup.sigil.face);
-    const blankSlots = getBlankDieFaceSlots(character);
+    character.sigilInventory = character.sigilInventory || [];
+    character.sigilInventory.push({ element: pickup.sigil.element, face: pickup.sigil.face || 1 });
 
-    if (!blankSlots.length) {
-      character.sigilInventory = character.sigilInventory || [];
-      character.sigilInventory.push(pickup.sigil);
-      updateRoom();
-      roomStatus.textContent = `${sigil.name} sigil held in reserve. No blank die faces available.`;
-      return;
-    }
+    let selectedCraftSource = { type: "inventory", index: character.sigilInventory.length - 1 };
 
     const overlay = document.createElement("div");
     overlay.className = "cache-upgrade-overlay sigil-pickup-overlay";
-    overlay.innerHTML = `
-      <section class="cache-upgrade-panel" aria-labelledby="sigil-pickup-title">
-        <p class="signal">Floating Sigil</p>
-        <h2 id="sigil-pickup-title">New Sigil Acquired</h2>
-        <div class="sigil-pickup-preview" style="--die-accent: ${sigil.accent}">
-          <img src="${sigil.image}" alt="${sigil.name} sigil">
-          <span>Common ${sigil.name}</span>
-        </div>
-        <div class="cache-upgrade-grid single-reward">
-          <article class="reward-card">
-            <h3>Equip Sigil:</h3>
-            <div class="reward-choice-grid">
-              ${blankSlots
-                .map(
-                  (slot) => `
-                    <button class="secondary-action reward-choice" type="button" data-die-index="${slot.dieIndex}" data-face-index="${slot.faceIndex}">
-                      <strong>Die ${slot.dieIndex + 1}</strong>
-                      <small>Face ${slot.faceIndex + 1}</small>
-                    </button>
-                  `
-                )
-                .join("")}
+
+    function renderPickupCrafting() {
+      overlay.innerHTML = `
+        <section class="cache-upgrade-panel sigil-pickup-crafting-panel" aria-labelledby="sigil-pickup-title">
+          <p class="signal">Floating Sigil</p>
+          <div class="sigil-pickup-header">
+            <div>
+              <h2 id="sigil-pickup-title">New Sigil Acquired</h2>
+              <div class="sigil-pickup-preview" style="--die-accent: ${sigil.accent}">
+                <img src="${sigil.image}" alt="${sigil.name} sigil">
+                <span>${sigilRarityLabels[pickup.sigil.face || 1]} ${sigil.name}</span>
+              </div>
             </div>
-          </article>
-        </div>
-      </section>
-    `;
+            <button class="primary-action" type="button" id="finish-sigil-pickup">Done Crafting</button>
+          </div>
+          <div id="sigil-pickup-workbench">
+            ${renderCraftingDatabank(character, selectedCraftSource)}
+            ${renderCraftingDice(character, selectedCraftSource)}
+          </div>
+        </section>
+      `;
+    }
+
+    renderPickupCrafting();
 
     document.querySelector(".room-screen").appendChild(overlay);
-    overlay.querySelectorAll("[data-die-index]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const dieIndex = Number(button.dataset.dieIndex);
-        const faceIndex = Number(button.dataset.faceIndex);
+    const workbench = overlay.querySelector("#sigil-pickup-workbench");
 
-        if (!addSigilToDieFace(character, pickup.sigil, dieIndex, faceIndex)) {
-          return;
-        }
+    function renderWorkbench() {
+      workbench.innerHTML = `
+        ${renderCraftingDatabank(character, selectedCraftSource)}
+        ${renderCraftingDice(character, selectedCraftSource)}
+      `;
+    }
 
-        overlay.remove();
-        updateRoom();
-        roomStatus.textContent = `${sigil.name} sigil equipped to Die ${dieIndex + 1}, Face ${faceIndex + 1}.`;
-        gameLog("sigil.socketed", { sigil: pickup.sigil, dieIndex, faceIndex, state: getRoomDebugState() });
-      });
+    bindCraftingWorkbench({
+      workbench,
+      character,
+      getSelectedCraftSource: () => selectedCraftSource,
+      setSelectedCraftSource: (source) => {
+        selectedCraftSource = source;
+      },
+      renderWorkbench,
+    });
+
+    overlay.querySelector("#finish-sigil-pickup").addEventListener("click", () => {
+      overlay.remove();
+      updateRoom();
+      roomStatus.textContent = `${sigil.name} sigil acquired. Dice crafting updated.`;
+      gameLog("sigil.pickupCraftingComplete", { sigil: pickup.sigil, state: getRoomDebugState() });
     });
   }
 
@@ -3327,14 +3562,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     function renderOverlay() {
       overlay.innerHTML = `
-        <section class="cache-upgrade-panel" aria-labelledby="program-library-title">
+        <section class="cache-upgrade-panel program-library-panel" aria-labelledby="program-library-title">
           <p class="signal">Program Library</p>
           <h2 id="program-library-title">Equip Programs</h2>
           <p class="program-preview-empty">${status} CACHE ${selectedProgramIds.length}/${requiredCount} equipped.</p>
           <div class="cache-upgrade-grid single-reward">
             <article class="reward-card">
               <h3>Owned Programs</h3>
-              <div class="reward-choice-grid">
+              <div class="reward-choice-grid program-library-list">
                 ${renderChoices()}
               </div>
             </article>
@@ -3631,12 +3866,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
       if (effect.type === "nextTurnExec") {
         const execAmount = Number.isFinite(effect.amount) ? effect.amount : 1;
+        const currentExecAmount = Number.isFinite(effect.currentAmount) ? effect.currentAmount : 0;
         currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
         allocatedProgramSymbols = {
           ...allocatedProgramSymbols,
           [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
         };
         character.nextTurnExecBonus += execAmount;
+        executionRollsRemaining += currentExecAmount;
         startProgramCooldown(program);
         isMoveMode = false;
         isPhysicalTargetMode = false;
@@ -3649,9 +3886,12 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         updateRunecastingPanel();
         updateRoom();
         rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
-        roomStatus.textContent = `${program.name} will add ${execAmount} temporary ${execAmount === 1 ? "Execution" : "Executions"} next turn.`;
+        roomStatus.textContent =
+          currentExecAmount > 0
+            ? `${program.name} added ${currentExecAmount} temporary ${currentExecAmount === 1 ? "Execution" : "Executions"} now and will add ${execAmount} next turn.`
+            : `${program.name} will add ${execAmount} temporary ${execAmount === 1 ? "Execution" : "Executions"} next turn.`;
         finishRunecastingIfNoOptions(roomStatus.textContent);
-        gameLog("program.nextTurnExecResolved", { programId, execAmount, state: getRoomDebugState() });
+        gameLog("program.nextTurnExecResolved", { programId, execAmount, currentExecAmount, state: getRoomDebugState() });
         return;
       }
 
@@ -4239,16 +4479,18 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
         selectedRollSlots.length = 0;
 
-        if (executionRollsRemaining <= 0 && !hasUsableCastSymbols()) {
-          deactivateRunecasting();
-          roomStatus.textContent = "No usable sigils rolled. Executions spent for this Sigil-Cast.";
-          gameLog("sigilCast.autoClosed.noUsableSymbols", {
+        if (!hasUsableCastSymbols()) {
+          roomStatus.textContent =
+            executionRollsRemaining > 0
+              ? "No usable sigils rolled. Select blank dice to reroll with remaining Executions."
+              : "No usable sigils rolled. Executions spent for this Sigil-Cast.";
+          gameLog("sigilCast.noUsableSymbols", {
             selectedRollSlots: [...slotsToRoll],
             finalResults,
             isReroll: hasRollResults,
+            executionRollsRemaining,
             state: getRoomDebugState(),
           });
-          return;
         }
 
         updateProgramAvailability();
@@ -4712,6 +4954,119 @@ function moveCraftingSigil(character, source, target) {
   return true;
 }
 
+function getCraftingSourceFromElement(element) {
+  const inventorySource = element.closest("[data-crafting-source='inventory']");
+  const faceSource = element.closest("[data-crafting-source='face']");
+
+  if (inventorySource) {
+    return { type: "inventory", index: Number(inventorySource.dataset.inventoryIndex) };
+  }
+
+  if (faceSource) {
+    return {
+      type: "face",
+      dieIndex: Number(faceSource.dataset.dieIndex),
+      faceIndex: Number(faceSource.dataset.faceIndex),
+    };
+  }
+
+  return null;
+}
+
+function getCraftingTargetFromElement(element) {
+  const faceTarget = element.closest("[data-crafting-target='face']");
+
+  if (faceTarget) {
+    return {
+      type: "face",
+      dieIndex: Number(faceTarget.dataset.dieIndex),
+      faceIndex: Number(faceTarget.dataset.faceIndex),
+    };
+  }
+
+  if (element.closest("[data-crafting-inventory-target]")) {
+    return { type: "inventory" };
+  }
+
+  return null;
+}
+
+function isSameCraftingSource(a, b) {
+  return (
+    a?.type === b?.type &&
+    a?.index === b?.index &&
+    a?.dieIndex === b?.dieIndex &&
+    a?.faceIndex === b?.faceIndex
+  );
+}
+
+function bindCraftingWorkbench({ workbench, character, getSelectedCraftSource, setSelectedCraftSource, renderWorkbench }) {
+  workbench.addEventListener("click", (event) => {
+    const target = getCraftingTargetFromElement(event.target);
+    const source = getCraftingSourceFromElement(event.target);
+    const selectedCraftSource = getSelectedCraftSource();
+
+    if (!selectedCraftSource && source) {
+      setSelectedCraftSource(source);
+      renderWorkbench();
+      return;
+    }
+
+    if (selectedCraftSource && source && isSameCraftingSource(selectedCraftSource, source)) {
+      setSelectedCraftSource(null);
+      renderWorkbench();
+      return;
+    }
+
+    if (selectedCraftSource && target) {
+      moveCraftingSigil(character, selectedCraftSource, target);
+      setSelectedCraftSource(null);
+      renderWorkbench();
+      return;
+    }
+
+    setSelectedCraftSource(null);
+    renderWorkbench();
+  });
+
+  workbench.addEventListener("dragstart", (event) => {
+    const source = getCraftingSourceFromElement(event.target);
+
+    if (!source) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.setData("application/json", JSON.stringify(source));
+    event.dataTransfer.effectAllowed = "move";
+  });
+
+  workbench.addEventListener("dragover", (event) => {
+    if (getCraftingTargetFromElement(event.target)) {
+      event.preventDefault();
+    }
+  });
+
+  workbench.addEventListener("drop", (event) => {
+    const target = getCraftingTargetFromElement(event.target);
+
+    if (!target) {
+      return;
+    }
+
+    event.preventDefault();
+
+    try {
+      const source = JSON.parse(event.dataTransfer.getData("application/json"));
+      moveCraftingSigil(character, source, target);
+      setSelectedCraftSource(null);
+      renderWorkbench();
+    } catch (error) {
+      gameError("crafting.drop.invalidSource", { message: error.message });
+    }
+  });
+}
+
 function renderCharacterOptions(selectedCharacterId) {
   return characters
     .map((character) => {
@@ -4768,15 +5123,10 @@ function showLevelMap(character) {
             <p class="signal">Q-Dara Route Net</p>
             <h2 id="level-map-title">World Map</h2>
           </div>
-          <div class="level-map-character">
-            ${renderRunCharacter(character)}
-            ${renderProgressionTracker(character.progression)}
+          <div class="level-map-tools">
+            <button class="secondary-action crafting-map-action" type="button" id="open-crafting">Crafting</button>
           </div>
         </header>
-
-        <div class="level-map-tools">
-          <button class="secondary-action crafting-map-action" type="button" id="open-crafting">Crafting</button>
-        </div>
 
         <div class="level-map-viewport world-map-viewport" aria-label="Q-Dara world node map">
           <div class="world-map-board">
@@ -4922,99 +5272,14 @@ function showSigilCraftingScreen(character) {
     `;
   }
 
-  function getSourceFromElement(element) {
-    const inventorySource = element.closest("[data-crafting-source='inventory']");
-    const faceSource = element.closest("[data-crafting-source='face']");
-
-    if (inventorySource) {
-      return { type: "inventory", index: Number(inventorySource.dataset.inventoryIndex) };
-    }
-
-    if (faceSource) {
-      return {
-        type: "face",
-        dieIndex: Number(faceSource.dataset.dieIndex),
-        faceIndex: Number(faceSource.dataset.faceIndex),
-      };
-    }
-
-    return null;
-  }
-
-  function getTargetFromElement(element) {
-    const faceTarget = element.closest("[data-crafting-target='face']");
-
-    if (faceTarget) {
-      return {
-        type: "face",
-        dieIndex: Number(faceTarget.dataset.dieIndex),
-        faceIndex: Number(faceTarget.dataset.faceIndex),
-      };
-    }
-
-    if (element.closest("[data-crafting-inventory-target]")) {
-      return { type: "inventory" };
-    }
-
-    return null;
-  }
-
-  workbench.addEventListener("click", (event) => {
-    const target = getTargetFromElement(event.target);
-    const source = getSourceFromElement(event.target);
-
-    if (!selectedCraftSource && source) {
+  bindCraftingWorkbench({
+    workbench,
+    character,
+    getSelectedCraftSource: () => selectedCraftSource,
+    setSelectedCraftSource: (source) => {
       selectedCraftSource = source;
-      renderWorkbench();
-      return;
-    }
-
-    if (selectedCraftSource && target) {
-      moveCraftingSigil(character, selectedCraftSource, target);
-      selectedCraftSource = null;
-      renderWorkbench();
-      return;
-    }
-
-    selectedCraftSource = null;
-    renderWorkbench();
-  });
-
-  workbench.addEventListener("dragstart", (event) => {
-    const source = getSourceFromElement(event.target);
-
-    if (!source) {
-      event.preventDefault();
-      return;
-    }
-
-    event.dataTransfer.setData("application/json", JSON.stringify(source));
-    event.dataTransfer.effectAllowed = "move";
-  });
-
-  workbench.addEventListener("dragover", (event) => {
-    if (getTargetFromElement(event.target)) {
-      event.preventDefault();
-    }
-  });
-
-  workbench.addEventListener("drop", (event) => {
-    const target = getTargetFromElement(event.target);
-
-    if (!target) {
-      return;
-    }
-
-    event.preventDefault();
-
-    try {
-      const source = JSON.parse(event.dataTransfer.getData("application/json"));
-      moveCraftingSigil(character, source, target);
-      selectedCraftSource = null;
-      renderWorkbench();
-    } catch (error) {
-      gameError("crafting.drop.invalidSource", { message: error.message });
-    }
+    },
+    renderWorkbench,
   });
 
   doneCrafting.addEventListener("click", () => showLevelMap(character));
