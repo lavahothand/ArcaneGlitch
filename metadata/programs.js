@@ -2,6 +2,7 @@
 // Supported effect types:
 // - damageAdjacent: requires an adjacent enemy. Uses amount, damageType ("arcane" or "physical"), and optional healAmount.
 // - damageLine: targets a hex distance spaces away in a straight line. Uses amount and damageType.
+// - damageRange: targets an enemy exactly distance spaces away by hex distance. Uses amount and damageType.
 // - debuffDefense: reduces Physical and Arcane Defense on an adjacent enemy by amount.
 // - damageAdjacentAll: loses selfDamage Integrity, then damages all adjacent enemies.
 // - confuseEnemy: targets an adjacent enemy; next enemy turn it attacks another enemy instead of the player.
@@ -12,6 +13,7 @@
 // - revealRiftThreads: temporarily reveals Rift Thread hexes.
 // - pushEnemy: targets an adjacent enemy, pushes it one hex away, and stuns it.
 // - sightRangeBonus: temporarily increases line of sight by amount.
+// - phaseThroughEnemies: allows movement paths through enemies for playerTurns player turns.
 // Cooldown is measured in player turns after the program is used.
 window.arcaneMetadata = window.arcaneMetadata || {};
 
@@ -35,14 +37,13 @@ window.arcaneMetadata.programs = {
     element: "surge",
     requirement: [{ element: "surge", face: 1 }],
     summary: "Deal 2 PD 2 spaces away.",
-    details: "Deal 2 Physical Damage to an enemy exactly 2 spaces away in a straight line.",
+    details: "Deal 2 Physical Damage to an enemy exactly 2 spaces away.",
     cooldown: 1,
     effect: {
-      type: "damageLine",
+      type: "damageRange",
       amount: 2,
       damageType: "physical",
       distance: 2,
-      revealTarget: true,
     },
   },
   rebuild: {
@@ -80,15 +81,13 @@ window.arcaneMetadata.programs = {
       { element: "surge", face: 1 },
       { element: "life", face: 1 },
     ],
-    summary: "Deal 1 PD 2 spaces away.",
-    details: "Spend one common Surge and one common Life symbol to target a hex 2 spaces away in a straight line. Valid target spaces are temporarily revealed while aiming.",
+    summary: "Deal 1 PD to all adjacent enemies.",
+    details: "Deal 1 Physical Damage to all adjacent enemies.",
     cooldown: 2,
     effect: {
-      type: "damageLine",
+      type: "damageAdjacentAll",
       amount: 1,
       damageType: "physical",
-      distance: 2,
-      revealTarget: true,
     },
   },
   shatter: {
@@ -100,7 +99,7 @@ window.arcaneMetadata.programs = {
       { element: "surge", face: 1 },
     ],
     summary: "Reduce enemy defenses by 1.",
-    details: "Spend one common Mind and one common Surge symbol to reduce an adjacent enemy's Physical Defense and Arcane Defense by 1.",
+    details: "Reduce an adjacent enemy's Physical Defense and Arcane Defense by 1.",
     cooldown: 1,
     effect: {
       type: "debuffDefense",
@@ -116,7 +115,7 @@ window.arcaneMetadata.programs = {
       { element: "void", face: 1 },
     ],
     summary: "Teleport 4 spaces in a straight line.",
-    details: "Spend one common Surge and one common Void symbol to teleport exactly 4 hex spaces in a straight-line direction.",
+    details: "Teleport exactly 4 hex spaces in a straight-line direction.",
     cooldown: 1,
     effect: {
       type: "blinkStraight",
@@ -132,7 +131,7 @@ window.arcaneMetadata.programs = {
       { element: "mind", face: 1 },
     ],
     summary: "Deal 1 AD and heal 1 Integrity.",
-    details: "Spend one common Life and one common Mind symbol to deal 1 Arcane Damage to an adjacent enemy, then heal 1 Integrity.",
+    details: "Deal 1 Arcane Damage to an adjacent enemy, then heal 1 Integrity.",
     cooldown: 2,
     effect: {
       type: "damageAdjacent",
@@ -150,7 +149,7 @@ window.arcaneMetadata.programs = {
       { element: "void", face: 1 },
     ],
     summary: "Enemy attacks another enemy next turn.",
-    details: "Spend one common Mind and one common Void symbol to make an adjacent enemy attack another enemy next turn instead of the player.",
+    details: "Make an adjacent enemy attack another enemy next turn instead of the player.",
     cooldown: 1,
     effect: {
       type: "confuseEnemy",
@@ -166,7 +165,7 @@ window.arcaneMetadata.programs = {
       { element: "life", face: 1 },
     ],
     summary: "Reset all other program cooldowns.",
-    details: "Spend one common Void and one common Life symbol to clear cooldowns on all other equipped programs.",
+    details: "Clear cooldowns on all other equipped programs.",
     cooldown: 1,
     effect: {
       type: "resetOtherCooldowns",
@@ -181,7 +180,7 @@ window.arcaneMetadata.programs = {
       { element: "void", face: 1 },
     ],
     summary: "Reveal Rift Threads this turn.",
-    details: "Spend two common Void symbols to reveal all Rift Thread hexes until the turn ends.",
+    details: "Reveal all Rift Thread hexes until the turn ends.",
     cooldown: 1,
     effect: {
       type: "revealRiftThreads",
@@ -196,7 +195,7 @@ window.arcaneMetadata.programs = {
       { element: "surge", face: 1 },
     ],
     summary: "Deal 3 AD to an adjacent enemy.",
-    details: "Spend two common Surge symbols to deal 3 Arcane Damage to an adjacent enemy.",
+    details: "Deal 3 Arcane Damage to an adjacent enemy.",
     cooldown: 2,
     effect: {
       type: "damageAdjacent",
@@ -213,27 +212,26 @@ window.arcaneMetadata.programs = {
       { element: "life", face: 1 },
     ],
     summary: "Push and stun an adjacent enemy.",
-    details: "Spend two common Life symbols to move an adjacent enemy one hex away and stun it for its next turn.",
+    details: "Move an adjacent enemy one hex away and stun it for its next turn.",
     cooldown: 1,
     effect: {
       type: "pushEnemy",
       stunTurns: 1,
     },
   },
-  vision: {
-    id: "vision",
-    name: "VISION",
+  shadow: {
+    id: "shadow",
+    name: "SHADOW",
     element: "mind",
     requirement: [
       { element: "mind", face: 1 },
       { element: "mind", face: 1 },
     ],
-    summary: "Increase sight range by 1.",
-    details: "Spend two common Mind symbols to increase line of sight by 1 until the end of your next turn.",
+    summary: "Move through enemies.",
+    details: "Move through enemy-occupied hexes until the end of your next turn. You still cannot stop on an enemy.",
     cooldown: 1,
     effect: {
-      type: "sightRangeBonus",
-      amount: 1,
+      type: "phaseThroughEnemies",
       playerTurns: 2,
     },
   },
