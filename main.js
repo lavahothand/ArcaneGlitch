@@ -128,6 +128,85 @@ const enemies = metadata.glitchspawn || {
       accuracy: 0.4,
     },
   },
+  plasmoid: {
+    id: "plasmoid",
+    name: "Plasmoid",
+    image: "characters/glitchspawn_4.png",
+    xpValue: 35,
+    behavior: "stationary",
+    proximityAttack: true,
+    stats: {
+      integrity: 4,
+      physicalDefense: 0,
+      arcaneDefense: 0,
+      power: 2,
+      accuracy: 0.78,
+    },
+  },
+  shadowclaw: {
+    id: "shadowclaw",
+    name: "Shadowclaw",
+    image: "characters/glitchspawn_5.png",
+    xpValue: 45,
+    behavior: "hyperAggressive",
+    stats: {
+      integrity: 5,
+      physicalDefense: 3,
+      arcaneDefense: 0,
+      power: 2,
+      accuracy: 0.5,
+    },
+  },
+  riftGhoul: {
+    id: "riftGhoul",
+    name: "Rift Ghoul",
+    image: "characters/Rift_Ghoul.png",
+    xpValue: 65,
+    behavior: "aggressive",
+    fixedStats: true,
+    stats: {
+      integrity: 7,
+      physicalDefense: 2,
+      arcaneDefense: 2,
+      power: 4,
+      accuracy: 0.5,
+      range: 2,
+    },
+  },
+  skinEater: {
+    id: "skinEater",
+    name: "Skin-Eater",
+    image: "characters/Skineater.png",
+    xpValue: 50,
+    behavior: "stationary",
+    fixedStats: true,
+    spawnChance: 0.1,
+    spawnType: "skinSpawn",
+    stats: {
+      integrity: 6,
+      physicalDefense: 1,
+      arcaneDefense: 0,
+      power: 3,
+      accuracy: 0.6,
+      move: 0,
+    },
+  },
+  skinSpawn: {
+    id: "skinSpawn",
+    name: "Skin-Spawn",
+    image: "characters/skinspawn.png",
+    xpValue: 15,
+    behavior: "hyperAggressive",
+    fixedStats: true,
+    stats: {
+      integrity: 2,
+      physicalDefense: 0,
+      arcaneDefense: 0,
+      power: 1,
+      accuracy: 0.5,
+      move: 2,
+    },
+  },
 };
 
 const startingStats = {
@@ -575,6 +654,59 @@ const programs = metadata.programs || {
       currentAmount: 1,
     },
   },
+  entangle: {
+    id: "entangle",
+    name: "ENTANGLE",
+    element: "life",
+    requirement: [{ element: "life", face: 2 }],
+    summary: "Adjacent enemies miss next turn.",
+    details: "All adjacent enemies have 0% accuracy during their next enemy turn.",
+    cooldown: 1,
+    effect: {
+      type: "entangleAdjacent",
+      duration: 1,
+    },
+  },
+  phase: {
+    id: "phase",
+    name: "PHASE",
+    element: "mind",
+    requirement: [{ element: "mind", face: 2 }],
+    summary: "Move and attack through walls.",
+    details: "Move and attack through walls until the end of your next turn.",
+    cooldown: 2,
+    effect: {
+      type: "phaseThroughWalls",
+      playerTurns: 2,
+    },
+  },
+  deathTouch: {
+    id: "deathTouch",
+    name: "DEATHTOUCH",
+    element: "void",
+    requirement: [{ element: "void", face: 2 }],
+    summary: "Teleport and destroy a lined enemy.",
+    details: "Teleport onto an enemy exactly 2 spaces away in a straight line. The enemy is destroyed.",
+    cooldown: 2,
+    effect: {
+      type: "deathTouchLine",
+      distance: 2,
+    },
+  },
+  plasma: {
+    id: "plasma",
+    name: "PLASMA",
+    element: "surge",
+    requirement: [{ element: "surge", face: 2 }],
+    summary: "Deal 4 AD adjacent.",
+    details: "Deal 4 Arcane Damage to an adjacent enemy.",
+    cooldown: 2,
+    effect: {
+      type: "damageAdjacent",
+      amount: 4,
+      damageType: "arcane",
+    },
+  },
 };
 
 const artifacts = metadata.artifacts || [
@@ -618,6 +750,25 @@ const customDieFaceCount = 6;
 const startingCustomFaceLimit = 3;
 const baseSightRange = 2;
 const baseProgramIds = ["teleport", "spark", "rebuild", "focus"];
+const supportedProgramEffectTypes = [
+  "damageAdjacent",
+  "damageLine",
+  "damageRange",
+  "debuffDefense",
+  "damageAdjacentAll",
+  "confuseEnemy",
+  "resetOtherCooldowns",
+  "healIntegrity",
+  "blinkStraight",
+  "nextTurnExec",
+  "revealRiftThreads",
+  "pushEnemy",
+  "sightRangeBonus",
+  "phaseThroughEnemies",
+  "entangleAdjacent",
+  "phaseThroughWalls",
+  "deathTouchLine",
+];
 const dice = [
   {
     id: "void",
@@ -843,8 +994,16 @@ function hasWallBetweenTiles(wallEdges, tileA, tileB) {
   return wallEdges.some((wallEdge) => wallEdge.edgeKey === edgeKey);
 }
 
-function buildEnemyRoster(count) {
+function buildEnemyRoster(count, tier = 1) {
   const pattern = ["voidRaider", "surgeCrawler", "mindPhantom", "surgeCrawler", "voidRaider"];
+
+  if (tier >= 3) {
+    pattern.splice(2, 0, "plasmoid", "skinEater");
+  }
+
+  if (tier >= 4) {
+    pattern.splice(4, 0, "shadowclaw", "riftGhoul");
+  }
 
   return Array.from({ length: count }, (_, index) => pattern[index % pattern.length]);
 }
@@ -857,23 +1016,23 @@ function getRoomConfigForTier(tier) {
   }
 
   if (normalizedTier === 2) {
-    return { tier, tileCount: 48, threadCount: 2, sigilCount: 1, enemyTypes: buildEnemyRoster(2) };
+    return { tier, tileCount: 48, threadCount: 2, sigilCount: 1, enemyTypes: buildEnemyRoster(2, normalizedTier) };
   }
 
   if (normalizedTier === 3) {
-    return { tier, tileCount: 60, threadCount: 2, sigilCount: 1, enemyTypes: buildEnemyRoster(3) };
+    return { tier, tileCount: 60, threadCount: 2, sigilCount: 1, enemyTypes: buildEnemyRoster(3, normalizedTier) };
   }
 
   if (normalizedTier === 4) {
-    return { tier, tileCount: 72, threadCount: 3, sigilCount: 1, enemyTypes: buildEnemyRoster(4) };
+    return { tier, tileCount: 72, threadCount: 3, sigilCount: 1, enemyTypes: buildEnemyRoster(4, normalizedTier) };
   }
 
   if (normalizedTier === 5) {
-    return { tier, tileCount: 84, threadCount: 4, sigilCount: 1, enemyTypes: buildEnemyRoster(5) };
+    return { tier, tileCount: 84, threadCount: 4, sigilCount: 1, enemyTypes: buildEnemyRoster(5, normalizedTier) };
   }
 
   if (normalizedTier === 6) {
-    return { tier, tileCount: 96, threadCount: 4, sigilCount: 1, enemyTypes: buildEnemyRoster(6) };
+    return { tier, tileCount: 96, threadCount: 4, sigilCount: 1, enemyTypes: buildEnemyRoster(6, normalizedTier) };
   }
 
   return {
@@ -881,8 +1040,24 @@ function getRoomConfigForTier(tier) {
     tileCount: Math.min(120, 96 + (normalizedTier - 6) * 8),
     threadCount: Math.min(6, 4 + Math.floor((normalizedTier - 5) / 2)),
     sigilCount: 1,
-    enemyTypes: buildEnemyRoster(Math.min(9, normalizedTier)),
+    enemyTypes: buildEnemyRoster(Math.min(9, normalizedTier), normalizedTier),
   };
+}
+
+function getRoomConfigForLevelNode(levelNode) {
+  const roomConfig = getRoomConfigForTier(levelNode?.tier || 1);
+
+  if (levelNode?.zoneId === "sestra") {
+    if (roomConfig.tier <= 1) {
+      return { ...roomConfig, tileCount: 24 };
+    }
+
+    if (roomConfig.tier === 2) {
+      return { ...roomConfig, tileCount: 36, threadCount: 1 };
+    }
+  }
+
+  return roomConfig;
 }
 
 function getRandomFromPool(pool) {
@@ -1090,14 +1265,14 @@ function getParcel7ExtraIslandCount(levelNode) {
   const tier = Math.max(1, levelNode?.tier || 1);
 
   if (tier <= 1) {
-    return 0;
+    return 1;
   }
 
   if (tier === 2) {
     return Math.random() < 0.5 ? 1 : 2;
   }
 
-  return Math.min(4, 2 + Math.floor(Math.random() * Math.min(3, Math.max(1, tier - 1))));
+  return Math.min(3, 1 + Math.floor(Math.random() * Math.min(3, Math.max(1, tier - 1))));
 }
 
 function createIslandRoomCoords(tileCount, levelNode = null) {
@@ -1149,6 +1324,19 @@ function createMeanderingRoomCoords(tileCount) {
   let current = coords[0];
   let directionIndex = Math.floor(Math.random() * roomDirections.length);
   let guard = 0;
+  const maxScreenWidth = Math.max(5.5, Math.min(9, Math.ceil(tileCount / 7)));
+  const maxVerticalSpan = Math.max(5, Math.min(10, Math.ceil(tileCount / 6)));
+
+  function isWithinMeanderBounds(coord) {
+    const screenXs = coords.map((item) => item.q - item.r * 0.5);
+    const candidateScreenX = coord.q - coord.r * 0.5;
+    const minScreenX = Math.min(candidateScreenX, ...screenXs);
+    const maxScreenX = Math.max(candidateScreenX, ...screenXs);
+    const minR = Math.min(coord.r, ...coords.map((item) => item.r));
+    const maxR = Math.max(coord.r, ...coords.map((item) => item.r));
+
+    return maxScreenX - minScreenX <= maxScreenWidth && maxR - minR <= maxVerticalSpan;
+  }
 
   while (coords.length < tileCount && guard < tileCount * 120) {
     guard += 1;
@@ -1165,7 +1353,9 @@ function createMeanderingRoomCoords(tileCount) {
     ];
     const nextDirection = preferredDirections.find((direction) => {
       const candidate = { q: current.q + direction.q, r: current.r + direction.r };
-      return !occupied.has(tileKey(candidate.q, candidate.r)) && countOccupiedNeighborCoords(candidate, occupied) <= 2;
+      return !occupied.has(tileKey(candidate.q, candidate.r)) &&
+        countOccupiedNeighborCoords(candidate, occupied) <= 2 &&
+        isWithinMeanderBounds(candidate);
     });
 
     if (!nextDirection) {
@@ -1178,7 +1368,11 @@ function createMeanderingRoomCoords(tileCount) {
     current = next;
 
     if (coords.length < tileCount && Math.random() < 0.3) {
-      const branchCandidates = getNeighborCoords(current).filter((coord) => !occupied.has(tileKey(coord.q, coord.r)) && countOccupiedNeighborCoords(coord, occupied) <= 2);
+      const branchCandidates = getNeighborCoords(current).filter((coord) =>
+        !occupied.has(tileKey(coord.q, coord.r)) &&
+        countOccupiedNeighborCoords(coord, occupied) <= 2 &&
+        isWithinMeanderBounds(coord)
+      );
       const branch = branchCandidates[Math.floor(Math.random() * branchCandidates.length)];
 
       if (branch) {
@@ -1188,7 +1382,10 @@ function createMeanderingRoomCoords(tileCount) {
   }
 
   fillRoomCoordsFromFrontier(coords, occupied, tileCount, (candidate, currentOccupied) =>
-    (countOccupiedNeighborCoords(candidate, currentOccupied) <= 2 ? 8 : -8) - getRoomCoordDistance(candidate) * 0.05 + Math.random() * 3
+    (isWithinMeanderBounds(candidate) ? 10 : -200) +
+      (countOccupiedNeighborCoords(candidate, currentOccupied) <= 2 ? 8 : -8) -
+      getRoomCoordDistance(candidate) * 0.05 +
+      Math.random() * 3
   );
 
   return coords;
@@ -1252,6 +1449,34 @@ function getWallGroupSize(groupOdds) {
   return 2;
 }
 
+function doWallEdgesPreserveConnectivity(tiles, blockedEdgeKeys) {
+  const startTile = tiles[0];
+
+  if (!startTile) {
+    return true;
+  }
+
+  const visited = new Set([startTile.id]);
+  const queue = [startTile];
+
+  while (queue.length) {
+    const currentTile = queue.shift();
+
+    roomDirections.forEach((_, sideIndex) => {
+      const neighbor = getNeighborTileForSide(tiles, currentTile, sideIndex);
+
+      if (!neighbor || visited.has(neighbor.id) || blockedEdgeKeys.has(getWallEdgeKeyForTiles(currentTile, neighbor))) {
+        return;
+      }
+
+      visited.add(neighbor.id);
+      queue.push(neighbor);
+    });
+  }
+
+  return tiles.every((tile) => visited.has(tile.id));
+}
+
 function generateWallEdges(tiles, reservedTileIds, roomConfig, levelNode = null) {
   const wallProfile = getWallGenerationProfile(levelNode);
   const wallGroupCount = Math.max(1, Math.min(wallProfile.maxGroups, Math.floor(roomConfig.tileCount / wallProfile.divisor)));
@@ -1277,17 +1502,22 @@ function generateWallEdges(tiles, reservedTileIds, roomConfig, levelNode = null)
           )
           .sort(() => Math.random() - 0.5)
       )
-      .find((candidateGroup) =>
-        candidateGroup.every((sideIndex) => {
+      .find((candidateGroup) => {
+        const candidateEdgeKeys = candidateGroup.map((sideIndex) => {
+          const neighbor = getNeighborTileForSide(tiles, tile, sideIndex);
+          return neighbor ? getWallEdgeKeyForTiles(tile, neighbor) : null;
+        });
+
+        return candidateGroup.every((sideIndex, index) => {
           const neighbor = getNeighborTileForSide(tiles, tile, sideIndex);
 
           if (!neighbor || reservedTileIds.has(neighbor.id) || neighbor.type !== "basic") {
             return false;
           }
 
-          return !usedEdgeKeys.has(getWallEdgeKeyForTiles(tile, neighbor));
-        })
-      );
+          return candidateEdgeKeys[index] && !usedEdgeKeys.has(candidateEdgeKeys[index]);
+        }) && doWallEdgesPreserveConnectivity(tiles, new Set([...usedEdgeKeys, ...candidateEdgeKeys]));
+      });
 
     if (!group) {
       continue;
@@ -1846,14 +2076,12 @@ function renderRollDieOptions(character, selectedRollSlots, castSymbols = null) 
       }
 
       const accent = symbol.blank ? getLoadoutDieAccent(loadoutDie) : getDieById(symbol.element).accent;
-      const label = getLoadoutDieLabel(loadoutDie, index);
       const isSelected = selectedRollSlots.includes(index);
 
       return `
         <button class="roll-die-option ${isSelected ? "selected" : ""}" type="button" data-roll-slot="${index}" style="--die-accent: ${accent}" aria-pressed="${isSelected}">
           ${renderSigilDieImage(symbol, "current result")}
-          <span>Die ${index + 1}</span>
-          <strong>${label}</strong>
+          <strong>Die ${index + 1}</strong>
         </button>
       `;
     })
@@ -2180,10 +2408,11 @@ function renderEnemyInfo(enemy) {
 function createEnemyInstance(enemyType, index, tileId, tier) {
   const baseEnemy = enemies[enemyType] || enemies.voidRaider;
   const normalizedTier = Math.max(1, tier);
-  const integrityBonus = Math.max(0, Math.floor((normalizedTier - 2) * 1.5));
-  const powerBonus = Math.max(0, Math.floor((normalizedTier - 2) / 2));
-  const defenseBonus = Math.max(0, Math.floor((normalizedTier - 4) / 2));
-  const xpBonus = Math.max(0, (normalizedTier - 1) * 5);
+  const scalesWithTier = !baseEnemy.fixedStats;
+  const integrityBonus = scalesWithTier ? Math.max(0, Math.floor((normalizedTier - 2) * 1.5)) : 0;
+  const powerBonus = scalesWithTier ? Math.max(0, Math.floor((normalizedTier - 2) / 2)) : 0;
+  const defenseBonus = scalesWithTier ? Math.max(0, Math.floor((normalizedTier - 4) / 2)) : 0;
+  const xpBonus = scalesWithTier ? Math.max(0, (normalizedTier - 1) * 5) : 0;
 
   return {
     ...baseEnemy,
@@ -2197,7 +2426,7 @@ function createEnemyInstance(enemyType, index, tileId, tier) {
       physicalDefense: (baseEnemy.stats.physicalDefense ?? 0) + defenseBonus,
       arcaneDefense: (baseEnemy.stats.arcaneDefense ?? 0) + defenseBonus,
       power: (baseEnemy.stats.power ?? 1) + powerBonus,
-      accuracy: Math.min(0.85, (baseEnemy.stats.accuracy ?? 0.4) + Math.max(0, normalizedTier - 1) * 0.05),
+      accuracy: Math.min(0.85, (baseEnemy.stats.accuracy ?? 0.4) + (scalesWithTier ? Math.max(0, normalizedTier - 1) * 0.05 : 0)),
     },
   };
 }
@@ -2427,8 +2656,9 @@ function getRandomEnemyStep(roomTiles, enemyPositionId, playerPositionId, occupi
 
 function getNextEnemyPosition(roomTiles, enemy, playerPositionId, occupiedTileIds = [], wallEdges = []) {
   const behavior = enemy.behavior || "neutral";
+  const moveSteps = Math.max(0, enemy.stats?.move ?? 1);
 
-  if (behavior === "stationary") {
+  if (behavior === "stationary" || moveSteps <= 0) {
     return enemy.positionId;
   }
 
@@ -2437,7 +2667,7 @@ function getNextEnemyPosition(roomTiles, enemy, playerPositionId, occupiedTileId
   }
 
   if (behavior === "aggressive" || behavior === "hyperAggressive") {
-    return getNextEnemyStepTowardPlayer(roomTiles, enemy.positionId, playerPositionId, occupiedTileIds, 1, wallEdges);
+    return getNextEnemyStepTowardPlayer(roomTiles, enemy.positionId, playerPositionId, occupiedTileIds, moveSteps, wallEdges);
   }
 
   return getRandomEnemyStep(roomTiles, enemy.positionId, playerPositionId, occupiedTileIds, wallEdges);
@@ -2463,15 +2693,40 @@ function isEnemyAdjacentToPlayer(roomTiles, enemy, playerPositionId, wallEdges =
   return getAdjacentEnemyTileIds(roomTiles, [enemy], playerPositionId, wallEdges).length > 0;
 }
 
+function canEnemyAttackPlayer(roomTiles, enemy, playerPositionId, activeEnemies = [], wallEdges = []) {
+  const range = Math.max(1, enemy.stats?.range || 1);
+
+  if (!enemy.positionId || enemy.stats.integrity <= 0) {
+    return false;
+  }
+
+  if (range === 1) {
+    return isEnemyAdjacentToPlayer(roomTiles, enemy, playerPositionId, wallEdges);
+  }
+
+  const enemyTile = roomTiles.find((tile) => tile.id === enemy.positionId);
+  const playerTile = roomTiles.find((tile) => tile.id === playerPositionId);
+
+  if (!enemyTile || !playerTile || getHexDistance(enemyTile, playerTile) > range) {
+    return false;
+  }
+
+  const occupiedTileIds = getOccupiedEnemyTileIds(activeEnemies).filter((tileId) => tileId !== enemy.positionId);
+  return getMovementPathToTile(roomTiles, enemy.positionId, playerPositionId, range, occupiedTileIds, wallEdges).length > 0;
+}
+
 function getRoomGridStyle(roomTiles) {
   const qs = roomTiles.map((tile) => tile.q);
   const rs = roomTiles.map((tile) => tile.r);
+  const screenXs = roomTiles.map((tile) => tile.q - tile.r * 0.5);
   const minQ = Math.min(...qs);
   const maxQ = Math.max(...qs);
   const minR = Math.min(...rs);
   const maxR = Math.max(...rs);
+  const minScreenX = Math.min(...screenXs);
+  const maxScreenX = Math.max(...screenXs);
 
-  return `--min-q: ${minQ}; --max-q: ${maxQ}; --min-r: ${minR}; --max-r: ${maxR};`;
+  return `--min-q: ${minQ}; --max-q: ${maxQ}; --min-r: ${minR}; --max-r: ${maxR}; --min-screen-x: ${minScreenX}; --max-screen-x: ${maxScreenX};`;
 }
 
 function getVisibleTileIds(roomTiles, characterPositionId, sightRange = baseSightRange) {
@@ -2587,7 +2842,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   character.stats.maxIntegrity = character.stats.maxIntegrity || character.stats.integrity;
   ensureProgramLibrary(character);
   const levelNode = levelNodes.find((node) => node.id === nodeId) || levelNodes[0];
-  const roomConfig = getRoomConfigForTier(levelNode.tier);
+  const roomConfig = getRoomConfigForLevelNode(levelNode);
   const room = generateRoomTiles(roomConfig, levelNode);
   const roomTiles = room.tiles;
   applyRoomTileTheme(roomTiles, levelNode);
@@ -2616,6 +2871,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     return enemy;
   });
+  let spawnedEnemyCount = 0;
   let characterPositionId = roomTiles[0].id;
   const exploredTileIds = new Set(getVisibleTileIds(roomTiles, characterPositionId));
   let isMoveMode = false;
@@ -2688,6 +2944,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
           ${renderArtifactStrip(character.artifacts || [])}
           ${renderCharacterStats(character.stats, temporaryExecutionBonusThisTurn + character.nextTurnExecBonus)}
           ${renderProgressionTracker(character.progression)}
+          <button class="secondary-action change-programs-action" type="button" id="change-programs-action">Change Programs</button>
           ${renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length)}
         </div>
 
@@ -2745,6 +3002,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   const rollStatus = document.querySelector("#roll-status");
   const rollConfirm = document.querySelector("#roll-confirm");
   const roomHoverTooltip = document.querySelector("#room-hover-tooltip");
+  const changeProgramsButton = document.querySelector("#change-programs-action");
   const selectedRollSlots = [];
   let currentCastSymbols = null;
   let allocatedProgramSymbols = {};
@@ -2760,6 +3018,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   let sightRangeBonus = 0;
   let sightRangeBonusTurnsRemaining = 0;
   let phaseThroughEnemiesTurnsRemaining = 0;
+  let phaseThroughWallsTurnsRemaining = 0;
 
   function getRoomDebugState() {
     return {
@@ -2781,6 +3040,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         integrity: enemy.stats.integrity,
         confusedTurns: enemy.confusedTurns || 0,
         stunnedTurns: enemy.stunnedTurns || 0,
+        accuracySuppressedTurns: enemy.accuracySuppressedTurns || 0,
       })),
       collectedThreads: collectedThreadTileIds.length,
       totalThreads: riftThreadTileIds.length,
@@ -2796,6 +3056,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       sightRangeBonus,
       sightRangeBonusTurnsRemaining,
       phaseThroughEnemiesTurnsRemaining,
+      phaseThroughWallsTurnsRemaining,
       pendingSymbolAssignment: pendingSymbolAssignment
         ? {
             programId: pendingSymbolAssignment.programId,
@@ -2879,6 +3140,91 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     indicator.textContent = `-${amount}`;
     tileElement.appendChild(indicator);
     window.setTimeout(() => indicator.remove(), 900);
+  }
+
+  function animateRiftGhoulBolt(enemy) {
+    const enemyToken = roomGrid.querySelector(`[data-enemy-id="${enemy.instanceId}"]`);
+    const characterToken = roomGrid.querySelector(".character-token");
+
+    if (!enemyToken || !characterToken) {
+      return Promise.resolve();
+    }
+
+    const stageRect = roomStage.getBoundingClientRect();
+    const enemyRect = enemyToken.getBoundingClientRect();
+    const characterRect = characterToken.getBoundingClientRect();
+    const startX = enemyRect.left + enemyRect.width / 2 - stageRect.left;
+    const startY = enemyRect.top + enemyRect.height / 2 - stageRect.top;
+    const endX = characterRect.left + characterRect.width / 2 - stageRect.left;
+    const endY = characterRect.top + characterRect.height / 2 - stageRect.top;
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const bolt = document.createElement("span");
+
+    bolt.className = "rift-ghoul-bolt";
+    bolt.style.left = `${startX}px`;
+    bolt.style.top = `${startY}px`;
+    bolt.style.width = `${Math.hypot(deltaX, deltaY)}px`;
+    bolt.style.setProperty("--bolt-angle", `${Math.atan2(deltaY, deltaX)}rad`);
+    roomStage.appendChild(bolt);
+
+    const animation = bolt.animate(
+      [
+        { opacity: 0, transform: "rotate(var(--bolt-angle)) scaleX(0.15)" },
+        { opacity: 1, transform: "rotate(var(--bolt-angle)) scaleX(1)" },
+        { opacity: 0, transform: "rotate(var(--bolt-angle)) scaleX(0.92)" },
+      ],
+      { duration: 360, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+    );
+
+    return animation.finished
+      .catch(() => null)
+      .finally(() => bolt.remove());
+  }
+
+  function resolveProximityEnemyAttacks() {
+    const proximityEnemies = getLivingEnemies().filter(
+      (enemy) => enemy.proximityAttack && isEnemyAdjacentToPlayer(roomTiles, enemy, characterPositionId, wallEdges)
+    );
+
+    if (!proximityEnemies.length) {
+      return null;
+    }
+
+    const attackResults = proximityEnemies.map((enemy) => ({
+      enemy,
+      didHit: Math.random() < (enemy.stats.accuracy ?? 0.75),
+    }));
+    const hitResults = attackResults.filter((result) => result.didHit);
+    const missedResults = attackResults.filter((result) => !result.didHit);
+    const incomingDamage = hitResults.reduce((total, result) => total + (result.enemy.stats.power || 1), 0);
+
+    if (incomingDamage > 0) {
+      character.stats.integrity = Math.max(0, character.stats.integrity - incomingDamage);
+    }
+
+    const statusParts = [];
+
+    if (hitResults.length) {
+      statusParts.push(`${hitResults.map((result) => result.enemy.name).join(", ")} hit for ${incomingDamage} Integrity.`);
+    }
+
+    if (missedResults.length) {
+      statusParts.push(`${missedResults.map((result) => result.enemy.name).join(", ")} missed.`);
+    }
+
+    gameLog("enemy.proximityAttack", {
+      attackers: proximityEnemies.map((enemy) => enemy.instanceId),
+      hits: hitResults.map((result) => result.enemy.instanceId),
+      misses: missedResults.map((result) => result.enemy.instanceId),
+      incomingDamage,
+      state: getRoomDebugState(),
+    });
+
+    return {
+      incomingDamage,
+      status: statusParts.join(" "),
+    };
   }
 
   function wait(milliseconds) {
@@ -3103,6 +3449,52 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     return activeEnemies.filter((enemy) => enemy.positionId && enemy.stats.integrity > 0);
   }
 
+  function getOpenAdjacentSpawnTiles(sourceTileId) {
+    const sourceTile = roomTiles.find((tile) => tile.id === sourceTileId);
+    const occupiedTileIds = new Set([...getOccupiedEnemyTileIds(activeEnemies), characterPositionId].filter(Boolean));
+
+    if (!sourceTile) {
+      return [];
+    }
+
+    return roomTiles.filter(
+      (tile) =>
+        !occupiedTileIds.has(tile.id) &&
+        getHexDistance(sourceTile, tile) === 1 &&
+        !hasWallBetweenTiles(wallEdges, sourceTile, tile)
+    );
+  }
+
+  function resolveEnemySpawns() {
+    const spawnedEnemies = [];
+
+    getLivingEnemies().forEach((enemy) => {
+      if (!enemy.spawnType || Math.random() >= (enemy.spawnChance || 0)) {
+        return;
+      }
+
+      const spawnTiles = getOpenAdjacentSpawnTiles(enemy.positionId);
+      const spawnTile = spawnTiles[Math.floor(Math.random() * spawnTiles.length)];
+
+      if (!spawnTile) {
+        return;
+      }
+
+      spawnedEnemyCount += 1;
+      const spawnedEnemy = createEnemyInstance(
+        enemy.spawnType,
+        activeEnemies.length + spawnedEnemyCount,
+        spawnTile.id,
+        levelNode.tier
+      );
+
+      activeEnemies.push(spawnedEnemy);
+      spawnedEnemies.push(spawnedEnemy);
+    });
+
+    return spawnedEnemies;
+  }
+
   function isRoomSecured() {
     return !hasLivingEnemies();
   }
@@ -3211,6 +3603,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     };
   }
 
+  function getPlayerWallEdges() {
+    return phaseThroughWallsTurnsRemaining > 0 ? [] : wallEdges;
+  }
+
+  function getEnemyAttackAccuracy(enemy) {
+    return enemy.accuracySuppressedTurns > 0 ? 0 : enemy.stats.accuracy ?? 0.4;
+  }
+
   function updateRoom(options = {}) {
     hideRoomHoverTooltip();
     const shouldCenterCamera = options.centerCamera !== false;
@@ -3220,8 +3620,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     const movementRange = securedRoom ? roomTiles.length : actionPointsRemaining;
     const occupiedEnemyTileIds = getOccupiedEnemyTileIds(activeEnemies);
     const movementBlockedTileIds = phaseThroughEnemiesTurnsRemaining > 0 ? [] : occupiedEnemyTileIds;
+    const playerWallEdges = getPlayerWallEdges();
     const reachableTileIds = isPlayerPhase && isMoveMode && canMove
-      ? getReachableTileIds(roomTiles, characterPositionId, movementRange, movementBlockedTileIds, wallEdges)
+      ? getReachableTileIds(roomTiles, characterPositionId, movementRange, movementBlockedTileIds, playerWallEdges)
           .filter((tileId) => !occupiedEnemyTileIds.includes(tileId))
       : [];
     const blinkTargetTileIds = isBlinkTargetMode ? pendingBlinkTargetTileIds : [];
@@ -3231,7 +3632,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     naturalVisibleTileIds.forEach((tileId) => exploredTileIds.add(tileId));
     const visibleTileIds = [...new Set([...naturalVisibleTileIds, ...previewTileIds])];
     const targetableEnemyTileIds = pendingAttack
-      ? pendingAttack.targetTileIds || getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges)
+      ? pendingAttack.targetTileIds || getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges)
       : [];
     const visibleEnemies = activeEnemies.filter(
       (enemy) => enemy.positionId && enemy.stats.integrity > 0 && visibleTileIds.includes(enemy.positionId)
@@ -3352,7 +3753,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       targetTileId,
       movementRange,
       phaseThroughEnemiesTurnsRemaining > 0 ? [] : occupiedEnemyTileIds,
-      wallEdges
+      getPlayerWallEdges()
     );
 
     if (!path.length) {
@@ -3497,12 +3898,16 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     if (phaseThroughEnemiesTurnsRemaining > 0) {
       phaseThroughEnemiesTurnsRemaining -= 1;
     }
+    if (phaseThroughWallsTurnsRemaining > 0) {
+      phaseThroughWallsTurnsRemaining -= 1;
+    }
     roomStage.classList.remove("movement-active", "dragging");
     deactivateRunecasting();
     updateRoom();
     roomStatus.textContent = "Glitchspawn Turn.";
     await wait(220);
     const previousTokenRects = captureEnemyTokenRects();
+    const spawnedEnemies = resolveEnemySpawns();
     const previousEnemyPositions = new Map(activeEnemies.map((enemy) => [enemy.instanceId, enemy.positionId]));
     activeEnemies.forEach((enemy) => {
       if (!enemy.positionId || enemy.stats.integrity <= 0) {
@@ -3518,12 +3923,15 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     const isShelteredByHaven = characterTile?.type === "haven";
     const attackingEnemies = isShelteredByHaven
       ? []
-      : activeEnemies.filter((enemy) => isEnemyAdjacentToPlayer(roomTiles, enemy, characterPositionId, wallEdges));
+      : activeEnemies.filter((enemy) => canEnemyAttackPlayer(roomTiles, enemy, characterPositionId, activeEnemies, wallEdges));
     const stunnedEnemies = getLivingEnemies().filter((enemy) => (enemy.stunnedTurns || 0) > 0);
     const stunnedEnemyIds = new Set(stunnedEnemies.map((enemy) => enemy.instanceId));
     let turnStatus = movedEnemies.length
       ? `${movedEnemies.length} Glitch Spawn ${movedEnemies.length === 1 ? "moves" : "move"} closer.`
       : "The Glitch Spawn hold position near the Sigilant.";
+    if (spawnedEnemies.length) {
+      turnStatus += ` ${spawnedEnemies.length} Skin-Spawn ${spawnedEnemies.length === 1 ? "emerges" : "emerge"}.`;
+    }
     if (isShelteredByHaven) {
       characterTile.type = "havenInactive";
       turnStatus += " Haven protection prevents enemy attacks.";
@@ -3546,7 +3954,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
           return null;
         }
 
-        const didHit = Math.random() < (enemy.stats.accuracy ?? 0.4);
+        const didHit = Math.random() < getEnemyAttackAccuracy(enemy);
         let damageResult = null;
 
         if (didHit) {
@@ -3577,7 +3985,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     const attackResults = playerAttackingEnemies.map((enemy) => ({
       enemy,
-      didHit: Math.random() < (enemy.stats.accuracy ?? 0.4),
+      didHit: Math.random() < getEnemyAttackAccuracy(enemy),
     }));
     const hitEnemies = attackResults.filter((result) => result.didHit).map((result) => result.enemy);
     const missedEnemies = attackResults.filter((result) => !result.didHit).map((result) => result.enemy);
@@ -3595,6 +4003,17 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       }
     }
 
+    const riftGhoulAttacks = attackResults.filter((result) => result.enemy.id === "riftGhoul");
+    if (riftGhoulAttacks.length) {
+      await Promise.all(riftGhoulAttacks.map((result) => animateRiftGhoulBolt(result.enemy)));
+    }
+
+    getLivingEnemies().forEach((enemy) => {
+      if (enemy.accuracySuppressedTurns > 0) {
+        enemy.accuracySuppressedTurns -= 1;
+      }
+    });
+
     if (character.stats.integrity <= 0) {
       turnStatus += " Integrity critical.";
       updateRoom();
@@ -3604,6 +4023,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       roomStatus.textContent = turnStatus;
       gameLog("turn.end.defeat", {
         movedEnemies: movedEnemies.map((enemy) => enemy.instanceId),
+        spawnedEnemies: spawnedEnemies.map((enemy) => enemy.instanceId),
         attackingEnemies: playerAttackingEnemies.map((enemy) => enemy.instanceId),
         confusedEnemies: confusedEnemies.map((enemy) => enemy.instanceId),
         hitEnemies: hitEnemies.map((enemy) => enemy.instanceId),
@@ -3641,6 +4061,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     roomStatus.textContent = turnStatus;
     gameLog("turn.end.resolved", {
       movedEnemies: movedEnemies.map((enemy) => enemy.instanceId),
+      spawnedEnemies: spawnedEnemies.map((enemy) => enemy.instanceId),
       attackingEnemies: playerAttackingEnemies.map((enemy) => enemy.instanceId),
       confusedEnemies: confusedEnemies.map((enemy) => enemy.instanceId),
       hitEnemies: hitEnemies.map((enemy) => enemy.instanceId),
@@ -4024,6 +4445,10 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     bindOverlay();
   }
 
+  changeProgramsButton.addEventListener("click", () => {
+    showProgramLibraryEquip("Choose equipped programs.");
+  });
+
   function showCacheUpgrade() {
     const programOptions = getCacheProgramOptions();
     const overlay = document.createElement("div");
@@ -4236,6 +4661,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     let statusLabel = "Physical Damage";
 
     pendingSymbolAssignment = null;
+    const playerWallEdges = getPlayerWallEdges();
 
     if (programId === "physical-damage") {
       allocatedSymbols = findPhysicalAllocationFromSymbol(currentCastSymbols, selectedSymbol);
@@ -4247,7 +4673,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       if (
         !program ||
         !selectedSymbol ||
-        !["damageAdjacent", "damageLine", "damageRange", "debuffDefense", "damageAdjacentAll", "confuseEnemy", "resetOtherCooldowns", "healIntegrity", "blinkStraight", "nextTurnExec", "revealRiftThreads", "pushEnemy", "sightRangeBonus", "phaseThroughEnemies"].includes(effect.type)
+        !supportedProgramEffectTypes.includes(effect.type)
       ) {
         return;
       }
@@ -4443,8 +4869,100 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         return;
       }
 
+      if (effect.type === "phaseThroughWalls") {
+        const playerTurns = Number.isFinite(effect.playerTurns) ? effect.playerTurns : 2;
+        markProgramAllocated(programId, program, allocatedSymbols);
+        phaseThroughWallsTurnsRemaining = Math.max(phaseThroughWallsTurnsRemaining, playerTurns);
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        roomStatus.textContent = `${program.name} lets you move and attack through walls until the end of your next turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        gameLog("program.phaseThroughWallsResolved", { programId, playerTurns, state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "entangleAdjacent") {
+        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
+
+        if (!adjacentEnemyTileIds.length) {
+          updateProgramAvailability();
+          updateRunecastingPanel();
+          updateRoom();
+          roomStatus.textContent = `${program.name} requires at least one adjacent enemy.`;
+          return;
+        }
+
+        const duration = Number.isFinite(effect.duration) ? effect.duration : 1;
+        const entangledEnemies = adjacentEnemyTileIds
+          .map((tileId) => getEnemyAtTile(activeEnemies, tileId))
+          .filter(Boolean);
+
+        entangledEnemies.forEach((enemy) => {
+          enemy.accuracySuppressedTurns = Math.max(enemy.accuracySuppressedTurns || 0, duration);
+        });
+        markProgramAllocated(programId, program, allocatedSymbols);
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        roomStatus.textContent = `${program.name} reduced ${entangledEnemies.length} adjacent ${entangledEnemies.length === 1 ? "enemy" : "enemies"} to 0% accuracy next turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        gameLog("program.entangleResolved", { programId, targetEnemyIds: entangledEnemies.map((enemy) => enemy.instanceId), state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "deathTouchLine") {
+        const lineDistance = Number.isFinite(effect.distance) ? effect.distance : 2;
+        const lineTargetTileIds = getLineTargetTileIds(roomTiles, characterPositionId, lineDistance, [], {
+          allowGaps: true,
+          allowOccupied: true,
+          ignoreWalls: phaseThroughWallsTurnsRemaining > 0,
+          wallEdges: playerWallEdges,
+        }).filter((tileId) => Boolean(getEnemyAtTile(activeEnemies, tileId)));
+
+        if (!lineTargetTileIds.length) {
+          updateProgramAvailability();
+          updateRunecastingPanel();
+          updateRoom();
+          roomStatus.textContent = `${program.name} needs an enemy exactly ${lineDistance} spaces away in a straight line.`;
+          return;
+        }
+
+        markProgramAllocated(programId, program, allocatedSymbols);
+        isMoveMode = false;
+        isPhysicalTargetMode = true;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = {
+          programId,
+          label: program.name,
+          effectType: "deathTouchLine",
+          targetTileIds: lineTargetTileIds,
+          prompt: `Choose an enemy exactly ${lineDistance} spaces away in a straight line.`,
+        };
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        return;
+      }
+
       if (effect.type === "pushEnemy") {
-        const pushableEnemyTileIds = getPushableEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges);
+        const pushableEnemyTileIds = getPushableEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
 
         if (!pushableEnemyTileIds.length) {
           updateProgramAvailability();
@@ -4475,7 +4993,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       }
 
       if (effect.type === "damageAdjacentAll") {
-        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges);
+        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
 
         if (!adjacentEnemyTileIds.length) {
           updateProgramAvailability();
@@ -4529,7 +5047,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       }
 
       if (effect.type === "debuffDefense") {
-        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges);
+        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
 
         if (!adjacentEnemyTileIds.length) {
           updateProgramAvailability();
@@ -4565,7 +5083,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       }
 
       if (effect.type === "confuseEnemy") {
-        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges);
+        const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
 
         if (!adjacentEnemyTileIds.length) {
           updateProgramAvailability();
@@ -4608,7 +5126,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         const lineTargetTileIds = getLineTargetTileIds(roomTiles, characterPositionId, lineDistance, [], {
           allowOccupied: true,
           ignoreWalls: Boolean(effect.ignoreWalls || effect.piercesWalls),
-          wallEdges,
+          wallEdges: playerWallEdges,
         });
 
         if (!lineTargetTileIds.length) {
@@ -4649,7 +5167,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
       if (effect.type === "damageRange") {
         const targetDistance = Number.isFinite(effect.distance) ? effect.distance : 2;
-        const rangeTargetTileIds = getEnemyTileIdsAtRange(roomTiles, activeEnemies, characterPositionId, targetDistance, wallEdges);
+        const rangeTargetTileIds = getEnemyTileIdsAtRange(roomTiles, activeEnemies, characterPositionId, targetDistance, playerWallEdges);
 
         if (!rangeTargetTileIds.length) {
           updateProgramAvailability();
@@ -4698,7 +5216,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       return;
     }
 
-    const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges);
+    const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
 
     if (!adjacentEnemyTileIds.length) {
       isPhysicalTargetMode = false;
@@ -4751,7 +5269,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         return;
       }
 
-      if (!getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges).length) {
+      if (!getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, getPlayerWallEdges()).length) {
         roomStatus.textContent = "Physical Damage requires an adjacent enemy.";
         return;
       }
@@ -4762,22 +5280,23 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     const program = getProgramById(programId);
     const effect = program?.effect || {};
+    const playerWallEdges = getPlayerWallEdges();
 
-    if (!program || !["damageAdjacent", "damageLine", "damageRange", "debuffDefense", "damageAdjacentAll", "confuseEnemy", "resetOtherCooldowns", "healIntegrity", "blinkStraight", "nextTurnExec", "revealRiftThreads", "pushEnemy", "sightRangeBonus", "phaseThroughEnemies"].includes(effect.type)) {
+    if (!program || !supportedProgramEffectTypes.includes(effect.type)) {
       return;
     }
 
-    if (["damageAdjacent", "damageAdjacentAll"].includes(effect.type) && !getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges).length) {
+    if (["damageAdjacent", "damageAdjacentAll", "entangleAdjacent"].includes(effect.type) && !getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges).length) {
       roomStatus.textContent = "This program requires an adjacent enemy.";
       return;
     }
 
-    if (["debuffDefense", "confuseEnemy"].includes(effect.type) && !getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges).length) {
+    if (["debuffDefense", "confuseEnemy"].includes(effect.type) && !getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges).length) {
       roomStatus.textContent = `${program.name} requires an adjacent enemy.`;
       return;
     }
 
-    if (effect.type === "pushEnemy" && !getPushableEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges).length) {
+    if (effect.type === "pushEnemy" && !getPushableEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges).length) {
       roomStatus.textContent = `${program.name} requires an adjacent enemy with an open hex behind it.`;
       return;
     }
@@ -4800,10 +5319,10 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       const lineDistance = Number.isFinite(effect.distance) ? effect.distance : 2;
 
       if (!getLineTargetTileIds(roomTiles, characterPositionId, lineDistance, [], {
-        allowOccupied: true,
-        ignoreWalls: Boolean(effect.ignoreWalls || effect.piercesWalls),
-        wallEdges,
-      }).length) {
+          allowOccupied: true,
+          ignoreWalls: Boolean(effect.ignoreWalls || effect.piercesWalls),
+          wallEdges: playerWallEdges,
+        }).length) {
         roomStatus.textContent = `${program.name} has no valid straight-line target.`;
         return;
       }
@@ -4812,8 +5331,23 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     if (effect.type === "damageRange") {
       const targetDistance = Number.isFinite(effect.distance) ? effect.distance : 2;
 
-      if (!getEnemyTileIdsAtRange(roomTiles, activeEnemies, characterPositionId, targetDistance, wallEdges).length) {
+      if (!getEnemyTileIdsAtRange(roomTiles, activeEnemies, characterPositionId, targetDistance, playerWallEdges).length) {
         roomStatus.textContent = `${program.name} has no enemy exactly ${targetDistance} spaces away.`;
+        return;
+      }
+    }
+
+    if (effect.type === "deathTouchLine") {
+      const lineDistance = Number.isFinite(effect.distance) ? effect.distance : 2;
+      const lineTargetTileIds = getLineTargetTileIds(roomTiles, characterPositionId, lineDistance, [], {
+        allowGaps: true,
+        allowOccupied: true,
+        ignoreWalls: phaseThroughWallsTurnsRemaining > 0,
+        wallEdges: playerWallEdges,
+      }).filter((tileId) => Boolean(getEnemyAtTile(activeEnemies, tileId)));
+
+      if (!lineTargetTileIds.length) {
+        roomStatus.textContent = `${program.name} needs an enemy exactly ${lineDistance} spaces away in a straight line.`;
         return;
       }
     }
@@ -5034,7 +5568,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     if (tileButton && pendingAttack) {
       const tileId = tileButton.dataset.tileId;
-      const targetableEnemyTileIds = pendingAttack.targetTileIds || getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, wallEdges);
+      const targetableEnemyTileIds = pendingAttack.targetTileIds || getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, getPlayerWallEdges());
 
       if (!targetableEnemyTileIds.includes(tileId)) {
         return;
@@ -5123,6 +5657,50 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         return;
       }
 
+      if (pendingAttack.effectType === "deathTouchLine") {
+        const enemyXp = targetEnemy.xpValue;
+        const enemyName = targetEnemy.name;
+        const attackLabel = pendingAttack.label;
+        const previousCharacterRect = captureCharacterTokenRect();
+        const didLevelUp = addCharacterXp(character, enemyXp);
+
+        targetEnemy.stats.integrity = 0;
+        targetEnemy.positionId = null;
+        targetEnemy.confusedTurns = 0;
+        targetEnemy.stunnedTurns = 0;
+        targetEnemy.accuracySuppressedTurns = 0;
+        characterPositionId = tileId;
+        exploredTileIds.add(tileId);
+        isPhysicalTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        updateRoom({ centerCamera: false });
+        await animateCharacterMovement(previousCharacterRect);
+        centerCameraOnTile(characterPositionId);
+        updateCamera();
+        const entryStatus = resolvePlayerTileEntry();
+        updateRoom();
+        roomStatus.textContent = `${attackLabel} destroyed ${enemyName}. +${enemyXp} XP.`;
+        if (entryStatus) {
+          roomStatus.textContent += ` ${entryStatus}`;
+        }
+        finishLevelIfComplete(entryStatus);
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        if (didLevelUp) {
+          window.setTimeout(showImmediateLevelReward, 120);
+        }
+        if (!hasLivingEnemies()) {
+          window.setTimeout(showAllDerezzedNotice, didLevelUp ? 260 : 120);
+        }
+        gameLog("program.deathTouchResolved", {
+          targetEnemyId: targetEnemy.instanceId,
+          destinationTileId: tileId,
+          state: getRoomDebugState(),
+        });
+        return;
+      }
+
       const dealtDamage = Math.max(0, pendingAttack.damage - targetEnemy.stats[pendingAttack.defenseStat]);
       const enemyIntegrityBeforeDamage = targetEnemy.stats.integrity;
       targetEnemy.stats.integrity = Math.max(0, targetEnemy.stats.integrity - dealtDamage);
@@ -5196,14 +5774,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       tileId,
       movementRange,
       phaseThroughEnemiesTurnsRemaining > 0 ? [] : occupiedEnemyTileIds,
-      wallEdges
+      getPlayerWallEdges()
     );
     const reachableTileIds = getReachableTileIds(
       roomTiles,
       characterPositionId,
       movementRange,
       phaseThroughEnemiesTurnsRemaining > 0 ? [] : occupiedEnemyTileIds,
-      wallEdges
+      getPlayerWallEdges()
     ).filter((reachableTileId) => !occupiedEnemyTileIds.includes(reachableTileId));
 
     if (!reachableTileIds.includes(tileId) || !movementPath.length) {
@@ -5227,12 +5805,21 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     centerCameraOnTile(characterPositionId);
     updateCamera();
     const entryStatus = resolvePlayerTileEntry();
+    const proximityStatus = resolveProximityEnemyAttacks();
     updateRoom();
-    if (entryStatus) {
-      roomStatus.textContent = entryStatus;
+    if (proximityStatus?.incomingDamage > 0) {
+      showDamageIndicator(characterPositionId, proximityStatus.incomingDamage, "player");
+    }
+    const movementStatus = [entryStatus, proximityStatus?.status].filter(Boolean).join(" ");
+    if (movementStatus) {
+      roomStatus.textContent = movementStatus;
+    }
+    if (character.stats.integrity <= 0) {
+      window.setTimeout(() => showRunDeathPopup(proximityStatus?.status || "Integrity depleted."), 260);
+      return;
     }
     finishLevelIfComplete(entryStatus);
-    gameLog("player.moved", { tileId, entryStatus, state: getRoomDebugState() });
+    gameLog("player.moved", { tileId, entryStatus, proximityStatus, state: getRoomDebugState() });
   });
 
   updateRunecastingPanel();

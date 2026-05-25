@@ -14,6 +14,9 @@
 // - pushEnemy: targets an adjacent enemy, pushes it one hex away, and stuns it.
 // - sightRangeBonus: temporarily increases line of sight by amount.
 // - phaseThroughEnemies: allows movement paths through enemies for playerTurns player turns.
+// - entangleAdjacent: adjacent enemies have 0% accuracy on their next enemy turn.
+// - phaseThroughWalls: allows player movement and player attacks through walls for playerTurns player turns.
+// - deathTouchLine: targets an enemy exactly distance spaces away in a straight line, teleports onto it, and destroys it.
 // Cooldown is measured in player turns after the program is used.
 window.arcaneMetadata = window.arcaneMetadata || {};
 
@@ -233,6 +236,59 @@ window.arcaneMetadata.programs = {
     effect: {
       type: "phaseThroughEnemies",
       playerTurns: 2,
+    },
+  },
+  entangle: {
+    id: "entangle",
+    name: "ENTANGLE",
+    element: "life",
+    requirement: [{ element: "life", face: 2 }],
+    summary: "Adjacent enemies miss next turn.",
+    details: "All adjacent enemies have 0% accuracy during their next enemy turn.",
+    cooldown: 1,
+    effect: {
+      type: "entangleAdjacent",
+      duration: 1,
+    },
+  },
+  phase: {
+    id: "phase",
+    name: "PHASE",
+    element: "mind",
+    requirement: [{ element: "mind", face: 2 }],
+    summary: "Move and attack through walls.",
+    details: "Move and attack through walls until the end of your next turn.",
+    cooldown: 2,
+    effect: {
+      type: "phaseThroughWalls",
+      playerTurns: 2,
+    },
+  },
+  deathTouch: {
+    id: "deathTouch",
+    name: "DEATHTOUCH",
+    element: "void",
+    requirement: [{ element: "void", face: 2 }],
+    summary: "Teleport and destroy a lined enemy.",
+    details: "Teleport onto an enemy exactly 2 spaces away in a straight line. The enemy is destroyed.",
+    cooldown: 2,
+    effect: {
+      type: "deathTouchLine",
+      distance: 2,
+    },
+  },
+  plasma: {
+    id: "plasma",
+    name: "PLASMA",
+    element: "surge",
+    requirement: [{ element: "surge", face: 2 }],
+    summary: "Deal 4 AD adjacent.",
+    details: "Deal 4 Arcane Damage to an adjacent enemy.",
+    cooldown: 2,
+    effect: {
+      type: "damageAdjacent",
+      amount: 4,
+      damageType: "arcane",
     },
   },
 };

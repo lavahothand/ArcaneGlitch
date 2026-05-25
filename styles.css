@@ -2232,6 +2232,23 @@ h1 {
   margin-left: auto;
 }
 
+.change-programs-action {
+  flex: 0 1 222px;
+  min-width: 190px;
+  min-height: 58px;
+  margin-left: auto;
+  padding: 10px 14px;
+  border-color: rgba(141, 255, 180, 0.56);
+  background:
+    linear-gradient(90deg, rgba(141, 255, 180, 0.08), rgba(88, 245, 255, 0.08)),
+    rgba(2, 3, 6, 0.86);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .thread-tracker {
   display: grid;
   grid-template-columns: 34px auto;
@@ -2531,7 +2548,7 @@ h1 {
   position: absolute;
   top: 0;
   left: 0;
-  width: calc((((var(--max-q) - var(--min-q)) + ((var(--max-r) - var(--min-r)) * 0.5) + 1) * var(--hex-x)) + var(--hex-width));
+  width: calc((((var(--max-screen-x) - var(--min-screen-x)) + 1) * var(--hex-x)) + var(--hex-width));
   height: calc((((var(--max-r) - var(--min-r)) + 1) * var(--hex-y)) + var(--hex-height));
   touch-action: none;
   will-change: transform;
@@ -2630,7 +2647,7 @@ h1 {
   cursor: pointer;
   padding: 0;
   transform:
-    translate(calc(((var(--q) - var(--min-q)) - ((var(--r) - var(--min-r)) * 0.5)) * var(--hex-x)), calc((var(--r) - var(--min-r)) * var(--hex-y)));
+    translate(calc(((var(--q) - (var(--r) * 0.5)) - var(--min-screen-x)) * var(--hex-x)), calc((var(--r) - var(--min-r)) * var(--hex-y)));
 }
 
 .room-tile > img:first-child {
@@ -2971,6 +2988,31 @@ h1 {
   text-shadow:
     0 0 9px rgba(255, 41, 73, 0.9),
     0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.rift-ghoul-bolt {
+  position: absolute;
+  z-index: 8;
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(16, 0, 24, 0.92) 16%, rgba(186, 76, 255, 0.95) 52%, rgba(34, 0, 48, 0.9) 84%, transparent 100%);
+  box-shadow:
+    0 0 10px rgba(178, 62, 255, 0.95),
+    0 0 26px rgba(74, 0, 120, 0.88),
+    0 0 38px rgba(0, 0, 0, 0.96);
+  transform: rotate(var(--bolt-angle, 0rad)) scaleX(0);
+  transform-origin: 0 50%;
+}
+
+.rift-ghoul-bolt::after {
+  content: "";
+  position: absolute;
+  inset: 2px 8px;
+  border-radius: inherit;
+  background: rgba(6, 0, 10, 0.86);
 }
 
 @keyframes damage-pop {
