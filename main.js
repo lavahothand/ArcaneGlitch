@@ -1,5 +1,7 @@
 const app = document.querySelector("#app");
 const startRunButton = document.querySelector("#start-run");
+const loadGameButton = document.querySelector("#load-game");
+const loadGameFileInput = document.querySelector("#load-game-file");
 const testModeButton = document.querySelector("#test-mode");
 const runeRain = document.querySelector("#rune-rain");
 const backgroundMusic = new Audio("sound/Moonglass Relay (Menu Uplink Mix).mp3");
@@ -8,6 +10,8 @@ backgroundMusic.loop = true;
 backgroundMusic.volume = 0.42;
 
 const DEBUG_GAME = true;
+const saveGameVersion = 1;
+const cyclesCurrencyImage = "cycles_currency.png";
 const debugEvents = [];
 const metadata = window.arcaneMetadata || {};
 
@@ -596,6 +600,7 @@ const startingMapState = {
   selectedNode: startingUnlockedNodes[0],
   completedNodes: [],
   unlockedNodes: [...startingUnlockedNodes],
+  visitedMarkets: [],
 };
 
 const programs = metadata.programs || {
@@ -711,8 +716,11 @@ const programs = metadata.programs || {
 
 const artifacts = metadata.artifacts || [
   {
-    id: "memoryShard",
-    name: "Memory Shard",
+    id: "powerGlyph",
+    name: "Power Glyph",
+    type: "permanent",
+    rarity: "uncommon",
+    image: "artifacts/art_powerglyph.png",
     stat: "exec",
     amount: 1,
     label: "EXECUTIONS +1",
@@ -720,23 +728,32 @@ const artifacts = metadata.artifacts || [
   {
     id: "cacheCore",
     name: "Cache Core",
+    type: "permanent",
+    rarity: "uncommon",
+    image: "artifacts/art_cachecore.png",
     stat: "cache",
     amount: 1,
     label: "CACHE +1",
   },
   {
-    id: "phaseSpur",
-    name: "Phase Spur",
-    stat: "move",
-    amount: 1,
-    label: "Actions +1",
-  },
-  {
     id: "integrityLattice",
     name: "Integrity Lattice",
+    type: "permanent",
+    rarity: "common",
+    image: "artifacts/art_integritylattice.png",
     stat: "maxIntegrity",
     amount: 1,
     label: "Max Integrity +1",
+  },
+  {
+    id: "biomechanics",
+    name: "Biomechanics",
+    type: "permanent",
+    rarity: "rare",
+    image: "artifacts/art_biomechanics.png",
+    stat: "move",
+    amount: 1,
+    label: "Actions +1",
   },
 ];
 
@@ -744,9 +761,56 @@ function getRandomOptions(items, count) {
   return [...items].sort(() => Math.random() - 0.5).slice(0, count);
 }
 
+function rollArtifactFromPool(artifactPool = artifacts) {
+  const rarityWeights = [
+    { rarity: "common", chance: 58 },
+    { rarity: "uncommon", chance: 32 },
+    { rarity: "rare", chance: 10 },
+  ];
+  const rarity = rollWeightedEntry(rarityWeights, rarityWeights[0]).rarity;
+  const matchingArtifacts = artifactPool.filter((artifact) => (artifact.rarity || "common") === rarity);
+  const options = matchingArtifacts.length ? matchingArtifacts : artifactPool;
+  const artifact = options[Math.floor(Math.random() * options.length)];
+
+  if (artifact?.id === "sigilGlyph") {
+    return {
+      ...artifact,
+      instanceId: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sigil: rollSigilFromProfile({}),
+    };
+  }
+
+  return artifact
+    ? {
+        ...artifact,
+        instanceId: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      }
+    : null;
+}
+
+function rollArtifactFromRarity(rarity, artifactPool = artifacts) {
+  const options = artifactPool.filter(
+    (artifact) => artifact.id !== "sigilGlyph" && (artifact.rarity || "common") === rarity
+  );
+  const artifact = options[Math.floor(Math.random() * options.length)];
+
+  return artifact
+    ? {
+        ...artifact,
+        instanceId: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      }
+    : null;
+}
+
 // Die positions 1-3 are always common, positions 4-5 are uncommon, and position 6 is rare.
 const dieFaces = [1, 1, 1, 2, 2, 3];
 const customDieFaceCount = 6;
+const levelRewardDieSideWeights = [
+  { sides: 6, chance: 45 },
+  { sides: 5, chance: 30 },
+  { sides: 4, chance: 20 },
+  { sides: 3, chance: 5 },
+];
 const startingCustomFaceLimit = 3;
 const baseSightRange = 2;
 const baseProgramIds = ["teleport", "spark", "rebuild", "focus"];
@@ -1686,10 +1750,18 @@ function getLoadoutDieFaces(loadoutDie) {
     return dieFaces.map((face) => getSigilDefinition(loadoutDie, face));
   }
 
-  return Array.from({ length: customDieFaceCount }, (_, index) => {
+  return Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, index) => {
     const sigil = loadoutDie?.faces?.[index];
     return sigil ? getSigilDefinition(sigil.element, sigil.face || 1) : null;
   });
+}
+
+function getCustomDieSideCount(loadoutDie) {
+  if (Number.isFinite(loadoutDie?.sides)) {
+    return Math.max(3, Math.min(customDieFaceCount, loadoutDie.sides));
+  }
+
+  return Math.max(3, Math.min(customDieFaceCount, loadoutDie?.faces?.length || customDieFaceCount));
 }
 
 function getLoadoutDieLabel(loadoutDie, index = 0) {
@@ -1722,12 +1794,15 @@ function getCharacterLoadoutElements(character) {
   );
 }
 
-function createCustomDie(faces) {
+function createCustomDie(faces = [], sideCount = customDieFaceCount) {
+  const sides = Math.max(3, Math.min(customDieFaceCount, sideCount));
+
   return {
     id: `crafted-${Date.now()}`,
     type: "custom",
-    name: "Crafted Die",
-    faces: Array.from({ length: customDieFaceCount }, (_, index) => {
+    name: sides === customDieFaceCount ? "Crafted Die" : `${sides}-Sided Die`,
+    sides,
+    faces: Array.from({ length: sides }, (_, index) => {
       const sigil = faces[index];
       return sigil ? { element: sigil.element, face: sigil.face || 1 } : null;
     }),
@@ -1757,17 +1832,91 @@ function createTestModeCharacter() {
     stats: { ...startingStats },
     progression: { ...startingProgression },
     artifacts: [],
+    cycles: 0,
     sigilInventory: sigilElementIds.map((element) => ({ element, face: 1 })),
     mapState: {
       selectedNode: testNodeId,
       completedNodes: [],
       unlockedNodes: [...new Set([...startingUnlockedNodes, testNodeId])],
+      visitedMarkets: [],
     },
   };
 }
 
-function createBlankDie() {
-  return createCustomDie([]);
+function rollLevelRewardDieSideCount() {
+  return rollWeightedEntry(levelRewardDieSideWeights, levelRewardDieSideWeights[0]).sides;
+}
+
+function rollCycleDropAmount() {
+  return 5 + Math.floor(Math.random() * 10) * 5;
+}
+
+function getArtifactCycleCost(artifact) {
+  const costs = {
+    common: 600,
+    uncommon: 1100,
+    rare: 1800,
+  };
+
+  return costs[artifact?.rarity || "common"] || costs.common;
+}
+
+function getSigilGlyphCycleCost(artifact) {
+  const costs = {
+    1: 600,
+    2: 1000,
+    3: 1500,
+  };
+
+  return costs[artifact?.sigil?.face || 1] || costs[1];
+}
+
+function applyArtifactToCharacter(character, artifact, sigilProfile = {}) {
+  character.artifacts = character.artifacts || [];
+  const artifactInstance = {
+    ...artifact,
+    instanceId: artifact.instanceId || `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  };
+  const amount = Number.isFinite(artifact.amount) ? artifact.amount : 1;
+
+  if (artifact.effect?.type === "sigilGlyph" && !artifactInstance.sigil) {
+    artifactInstance.sigil = rollSigilFromProfile(sigilProfile);
+  }
+
+  if (artifact.type !== "temporary" || artifact.uses > 0 || artifact.effect?.type === "sigilGlyph") {
+    character.artifacts.push(artifactInstance);
+  }
+
+  if (artifact.effect?.type === "temporaryActions") {
+    character.temporaryActionBoostAmount = Math.max(character.temporaryActionBoostAmount || 0, artifact.effect.amount || 1);
+    character.temporaryActionBoostTurns = Math.max(character.temporaryActionBoostTurns || 0, artifact.effect.turns || 3);
+    return artifactInstance;
+  }
+
+  if (artifact.effect?.type === "healIntegrity") {
+    const healAmount = Number.isFinite(artifact.effect.amount) ? artifact.effect.amount : 1;
+    character.stats.integrity = Math.min(character.stats.maxIntegrity, character.stats.integrity + healAmount);
+    return artifactInstance;
+  }
+
+  if (artifact.stat === "maxIntegrity") {
+    character.stats.maxIntegrity += amount;
+    character.stats.integrity = Math.min(character.stats.maxIntegrity, character.stats.integrity + amount);
+    return artifactInstance;
+  }
+
+  if (Number.isFinite(character.stats[artifact.stat])) {
+    character.stats[artifact.stat] += amount;
+  }
+
+  return artifactInstance;
+}
+
+function createBlankDie(sideCount = customDieFaceCount) {
+  return {
+    ...createCustomDie([], sideCount),
+    name: `${sideCount}-Sided Blank Die`,
+  };
 }
 
 function getBlankDieFaceSlots(character) {
@@ -1776,7 +1925,7 @@ function getBlankDieFaceSlots(character) {
       return [];
     }
 
-    return Array.from({ length: customDieFaceCount }, (_, faceIndex) =>
+    return Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, faceIndex) =>
       loadoutDie.faces?.[faceIndex] ? null : { dieIndex, faceIndex }
     ).filter(Boolean);
   });
@@ -1789,9 +1938,9 @@ function addSigilToDieFace(character, sigil, dieIndex, faceIndex) {
     return false;
   }
 
-  loadoutDie.faces = Array.from({ length: customDieFaceCount }, (_, index) => loadoutDie.faces?.[index] || null);
+  loadoutDie.faces = Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, index) => loadoutDie.faces?.[index] || null);
 
-  if (loadoutDie.faces[faceIndex]) {
+  if (faceIndex < 0 || faceIndex >= loadoutDie.faces.length || loadoutDie.faces[faceIndex]) {
     return false;
   }
 
@@ -2060,6 +2209,55 @@ function renderThreadTracker(collectedCount, totalCount) {
   `;
 }
 
+function renderCycleTracker(cycles = 0) {
+  return `
+    <div class="cycle-tracker" aria-label="Cycles">
+      <img src="${cyclesCurrencyImage}" alt="">
+      <span>Cycles</span>
+      <strong>${cycles}</strong>
+    </div>
+  `;
+}
+
+function getLevelCycleMaxTurns(tileCount, enemyCount, riftThreadCount) {
+  return Math.ceil(tileCount / 2) + enemyCount * 5 + riftThreadCount * 5;
+}
+
+function getLevelCycleReward(turnNumber, maxTurns) {
+  const turnRatio = maxTurns > 0 ? turnNumber / maxTurns : 1;
+
+  if (turnRatio <= 0.4) {
+    return 400;
+  }
+
+  if (turnRatio <= 0.5) {
+    return 300;
+  }
+
+  if (turnRatio <= 0.8) {
+    return 200;
+  }
+
+  if (turnRatio <= 0.9) {
+    return 100;
+  }
+
+  return 50;
+}
+
+function renderCyclePanel(cycles = 0, reward = 0, currentTurns = 1, maxTurns = 0) {
+  return `
+    <div class="cycle-panel" aria-label="Cycles and level reward">
+      <div class="cycle-tracker" aria-label="Cycles">
+        <img src="${cyclesCurrencyImage}" alt="">
+        <span>Cycles</span>
+        <strong>${cycles} <em>+${reward}</em></strong>
+        <small>${currentTurns} / ${maxTurns}</small>
+      </div>
+    </div>
+  `;
+}
+
 function renderRollDieOptions(character, selectedRollSlots, castSymbols = null) {
   if (!Array.isArray(castSymbols) || !castSymbols.length) {
     return `<p class="roll-empty">First Sigil-Cast rolls all equipped dice.</p>`;
@@ -2159,6 +2357,20 @@ function getCastSymbols(character, selectedRollSlots, results) {
   }));
 }
 
+function getAvailableSigilGlyphSymbols(character) {
+  return (character.artifacts || [])
+    .filter((artifact) => artifact.effect?.type === "sigilGlyph" && artifact.uses > 0 && artifact.sigil)
+    .map((artifact, index) => ({
+      resultIndex: `glyph-${artifact.instanceId || artifact.id}-${index}`,
+      slotIndex: null,
+      artifactInstanceId: artifact.instanceId || artifact.id,
+      element: artifact.sigil.element,
+      face: artifact.sigil.face || 1,
+      faceIndex: null,
+      blank: false,
+    }));
+}
+
 function findProgramAllocation(program, castSymbols) {
   if (!Array.isArray(castSymbols)) {
     return [];
@@ -2179,7 +2391,7 @@ function findProgramAllocation(program, castSymbols) {
 }
 
 function findPhysicalAllocation(castSymbols) {
-  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => !symbol.spent && !symbol.blank) : [];
+  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => !symbol.spent && !symbol.blank && !symbol.artifactInstanceId) : [];
 
   if (!availableSymbols.length) {
     return [];
@@ -2203,6 +2415,7 @@ function findPhysicalAllocationFromSymbol(castSymbols, selectedSymbol) {
     ? castSymbols.filter(
         (symbol) =>
           !symbol.spent &&
+          !symbol.artifactInstanceId &&
           symbol.element === selectedSymbol.element &&
           symbol.face === selectedSymbol.face
       )
@@ -2224,6 +2437,26 @@ function markSymbolsSpent(castSymbols, symbolsToSpend) {
   }));
 }
 
+function getArtifactDisplayLabel(artifact) {
+  const sigil = artifact.sigil ? getSigilDefinition(artifact.sigil.element, artifact.sigil.face) : null;
+  const sigilText = sigil ? ` (${sigilRarityLabels[artifact.sigil.face || 1]} ${sigil.name})` : "";
+  const usesText = Number.isFinite(artifact.uses) ? ` - ${artifact.uses} use${artifact.uses === 1 ? "" : "s"}` : "";
+
+  return `${artifact.label}${sigilText}${usesText}`;
+}
+
+function getArtifactImage(artifact) {
+  if (artifact.image) {
+    return artifact.image;
+  }
+
+  if (artifact.effect?.type === "sigilGlyph" && artifact.sigil) {
+    return getSigilDefinition(artifact.sigil.element, artifact.sigil.face)?.image || "artifact_1.png";
+  }
+
+  return "artifact_1.png";
+}
+
 function getExecutionStatusText(remaining) {
   return `EXECUTIONS (ROLLS) REMAINING: ${remaining}`;
 }
@@ -2237,18 +2470,30 @@ function renderRunCharacter(character) {
   `;
 }
 
-function renderArtifactStrip(collectedArtifacts) {
+function renderArtifactStrip(collectedArtifacts, pendingAssignment = null) {
+  const availableGlyphSymbols = getAvailableSigilGlyphSymbols({ artifacts: collectedArtifacts });
+
   return `
     <div class="artifact-strip" aria-label="Collected artifacts">
       ${
         collectedArtifacts.length
           ? collectedArtifacts
               .map(
-                (artifact) => `
-            <span class="artifact-badge" tabindex="0" data-artifact-info="${artifact.name}: ${artifact.label}">
-              ${artifact.name}
-            </span>
-          `
+                (artifact) => {
+                  const artifactInstanceId = artifact.instanceId || artifact.id;
+                  const glyphSymbol = availableGlyphSymbols.find((symbol) => symbol.artifactInstanceId === artifactInstanceId);
+                  const isAssignableGlyph = Boolean(
+                    glyphSymbol &&
+                      pendingAssignment?.candidateResultIndices?.has(glyphSymbol.resultIndex)
+                  );
+
+                  return `
+            <button class="artifact-badge ${artifact.uses > 0 ? "usable" : ""} ${isAssignableGlyph ? "assignable" : ""}" type="button" ${artifact.uses > 0 ? `data-artifact-use="${artifactInstanceId}"` : `aria-disabled="true"`} data-artifact-info="${artifact.name}: ${getArtifactDisplayLabel(artifact)}">
+              <img src="${getArtifactImage(artifact)}" alt="">
+              <span>${artifact.name}</span>
+            </button>
+          `;
+                }
               )
               .join("")
           : `<span class="artifact-empty">No Artifacts</span>`
@@ -2257,9 +2502,10 @@ function renderArtifactStrip(collectedArtifacts) {
   `;
 }
 
-function renderCharacterStats(stats, temporaryExecutionBonus = 0) {
+function renderCharacterStats(stats, temporaryExecutionBonus = 0, temporaryActionBonus = 0) {
   const integrityPercent = Math.max(0, Math.min(100, (stats.integrity / stats.maxIntegrity) * 100));
   const executionBonus = Math.max(0, temporaryExecutionBonus);
+  const actionBonus = Math.max(0, temporaryActionBonus);
 
   return `
     <dl class="stat-grid" id="character-stats" aria-label="Character stats">
@@ -2282,7 +2528,7 @@ function renderCharacterStats(stats, temporaryExecutionBonus = 0) {
       </div>
       <div class="stat">
         <dt>Actions</dt>
-        <dd>${stats.move}</dd>
+        <dd>${stats.move}${actionBonus ? `<span class="stat-temp-bonus">+${actionBonus}</span>` : ""}</dd>
       </div>
     </dl>
   `;
@@ -2340,8 +2586,11 @@ function ensureMapState(character) {
       selectedNode: startingMapState.selectedNode,
       completedNodes: [...startingMapState.completedNodes],
       unlockedNodes: [...startingMapState.unlockedNodes],
+      visitedMarkets: [...startingMapState.visitedMarkets],
     };
   }
+
+  character.mapState.visitedMarkets = character.mapState.visitedMarkets || [];
 
   return character.mapState;
 }
@@ -2361,6 +2610,62 @@ function completeLevelNode(character, nodeId) {
   });
 
   mapState.selectedNode = node?.unlocks?.[0] || nodeId;
+}
+
+function cloneSaveData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function downloadJsonSave(saveData) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `arcane-glitch-save-${timestamp}.json`;
+  const blob = new Blob([JSON.stringify(saveData, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function normalizeLoadedCharacter(character) {
+  const baseCharacter = characters.find((item) => item.id === character?.id) || characters[0];
+
+  return {
+    ...baseCharacter,
+    ...character,
+    stats: { ...startingStats, ...(character?.stats || {}) },
+    progression: { ...startingProgression, ...(character?.progression || {}) },
+    programs: Array.isArray(character?.programs) ? character.programs : [...baseProgramIds],
+    programLibrary: Array.isArray(character?.programLibrary) ? character.programLibrary : [...baseProgramIds],
+    loadout: Array.isArray(character?.loadout) ? character.loadout : [createBlankDie()],
+    artifacts: Array.isArray(character?.artifacts) ? character.artifacts : [],
+    cycles: Number.isFinite(character?.cycles) ? character.cycles : 0,
+    sigilInventory: Array.isArray(character?.sigilInventory) ? character.sigilInventory : [],
+    mapState: character?.mapState || cloneSaveData(startingMapState),
+  };
+}
+
+function loadSaveGame(saveData) {
+  if (!saveData || saveData.game !== "Arcane Glitch" || !saveData.character) {
+    throw new Error("This is not an Arcane Glitch save file.");
+  }
+
+  const character = normalizeLoadedCharacter(saveData.character);
+  const roomState = saveData.currentRoom || null;
+
+  startBackgroundMusic();
+  window.clearInterval(runeRainTimer);
+
+  if (roomState?.nodeId) {
+    showInitialRoom(character, roomState.nodeId, roomState);
+    return;
+  }
+
+  showLevelMap(character);
 }
 
 function renderEnemyInfo(enemy) {
@@ -2753,6 +3058,7 @@ function renderRoomTiles(
   collectedArtifactTileIds = [],
   sigilPickups = [],
   collectedSigilTileIds = [],
+  cycleDrops = [],
   wallEdges = []
 ) {
   return roomTiles
@@ -2766,6 +3072,7 @@ function renderRoomTiles(
       const hasRiftThread = riftThreadTileIds.includes(tile.id) && !collectedThreadTileIds.includes(tile.id);
       const hasArtifact = artifactTileIds.includes(tile.id) && !collectedArtifactTileIds.includes(tile.id);
       const sigilPickup = sigilPickups.find((pickup) => pickup.tileId === tile.id && !collectedSigilTileIds.includes(tile.id));
+      const cycleDrop = cycleDrops.find((drop) => drop.tileId === tile.id);
       const visibleWallEdges = (isVisible || isExplored)
         ? wallEdges
             .map((wallEdge) => {
@@ -2814,6 +3121,11 @@ function renderRoomTiles(
               ? `<img class="floating-sigil-token" src="${getSigilDefinition(sigilPickup.sigil.element, sigilPickup.sigil.face)?.image}" alt="Floating sigil">`
               : ""
           }
+          ${
+            cycleDrop && isVisible
+              ? `<span class="cycle-drop-token" aria-label="${cycleDrop.amount} Cycles"><img src="${cyclesCurrencyImage}" alt=""><strong>${cycleDrop.amount}</strong></span>`
+              : ""
+          }
           ${visibleWallEdges
             .map((wallEdge) => {
               const segmentNumber = wallSegmentByDirectionSide[wallEdge.renderedSideIndex] || 1;
@@ -2837,30 +3149,34 @@ function renderRoomTiles(
     .join("");
 }
 
-function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
+function showInitialRoom(character, nodeId = startingMapState.selectedNode, savedRoomState = null) {
   character.progression = character.progression || { ...startingProgression };
   character.stats.maxIntegrity = character.stats.maxIntegrity || character.stats.integrity;
+  character.cycles = Number.isFinite(character.cycles) ? character.cycles : 0;
   ensureProgramLibrary(character);
   const levelNode = levelNodes.find((node) => node.id === nodeId) || levelNodes[0];
-  const roomConfig = getRoomConfigForLevelNode(levelNode);
-  const room = generateRoomTiles(roomConfig, levelNode);
+  const roomConfig = savedRoomState?.roomConfig || getRoomConfigForLevelNode(levelNode);
+  const room = savedRoomState?.room || generateRoomTiles(roomConfig, levelNode);
   const roomTiles = room.tiles;
-  applyRoomTileTheme(roomTiles, levelNode);
+  if (!savedRoomState?.room) {
+    applyRoomTileTheme(roomTiles, levelNode);
+  }
   const riftTile = roomTiles.find((tile) => tile.id === room.riftTileId);
   const riftThreadTileIds = room.threadTileIds;
   const cacheTileIds = room.cacheTileIds || [];
   const artifactTileIds = room.artifactTileIds || [];
   const sigilPickups = room.sigilPickups || [];
   const wallEdges = room.wallEdges || [];
-  const collectedThreadTileIds = [];
-  const collectedCacheTileIds = [];
-  const collectedArtifactTileIds = [];
-  const collectedSigilTileIds = [];
-  const usedPowerHubTileIds = [];
+  const collectedThreadTileIds = [...(savedRoomState?.collectedThreadTileIds || [])];
+  const collectedCacheTileIds = [...(savedRoomState?.collectedCacheTileIds || [])];
+  const collectedArtifactTileIds = [...(savedRoomState?.collectedArtifactTileIds || [])];
+  const collectedSigilTileIds = [...(savedRoomState?.collectedSigilTileIds || [])];
+  const usedPowerHubTileIds = [...(savedRoomState?.usedPowerHubTileIds || [])];
+  const cycleDrops = [...(savedRoomState?.cycleDrops || [])];
   const enemySpawnCandidates = roomTiles
     .filter((tile) => tile.id !== "tile-0" && tile.id !== riftTile.id)
     .sort((a, b) => getHexDistance(a, riftTile) - getHexDistance(b, riftTile));
-  const activeEnemies = roomConfig.enemyTypes.map((enemyType, index) => {
+  const activeEnemies = savedRoomState?.activeEnemies || roomConfig.enemyTypes.map((enemyType, index) => {
     const spawnTile = index === 0 ? riftTile : enemySpawnCandidates[index - 1] || riftTile;
     const enemy = createEnemyInstance(enemyType, index, spawnTile.id, levelNode.tier);
 
@@ -2871,36 +3187,46 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     return enemy;
   });
-  let spawnedEnemyCount = 0;
-  let characterPositionId = roomTiles[0].id;
-  const exploredTileIds = new Set(getVisibleTileIds(roomTiles, characterPositionId));
+  const levelCycleMaxTurns = Number.isFinite(savedRoomState?.levelCycleMaxTurns)
+    ? savedRoomState.levelCycleMaxTurns
+    : getLevelCycleMaxTurns(roomTiles.length, activeEnemies.length, riftThreadTileIds.length);
+  let levelCycleRewardAwarded = Boolean(savedRoomState?.levelCycleRewardAwarded);
+  let spawnedEnemyCount = savedRoomState?.spawnedEnemyCount || 0;
+  let characterPositionId = savedRoomState?.characterPositionId || roomTiles[0].id;
+  const exploredTileIds = new Set(savedRoomState?.exploredTileIds || getVisibleTileIds(roomTiles, characterPositionId));
   let isMoveMode = false;
   let isPhysicalTargetMode = false;
   let isBlinkTargetMode = false;
   let pendingPhysicalDamage = 0;
-  let turnNumber = 1;
-  let actionPointsRemaining = character.stats.move;
-  character.programCooldowns = character.programCooldowns || {};
+  let turnNumber = savedRoomState?.turnNumber || 1;
+  let actionPointsRemaining = Number.isFinite(savedRoomState?.actionPointsRemaining) ? savedRoomState.actionPointsRemaining : character.stats.move;
+  character.programCooldowns = savedRoomState?.programCooldowns || character.programCooldowns || {};
   character.nextTurnExecBonus = character.nextTurnExecBonus || 0;
   let programCooldowns = character.programCooldowns;
   let cooldownLockedProgramIds = new Set();
-  let temporaryExecutionBonusThisTurn = character.nextTurnExecBonus;
-  let executionRollsRemaining = character.stats.exec + temporaryExecutionBonusThisTurn;
-  character.nextTurnExecBonus = 0;
+  let temporaryExecutionBonusThisTurn = savedRoomState?.temporaryExecutionBonusThisTurn || character.nextTurnExecBonus;
+  let executionRollsRemaining = Number.isFinite(savedRoomState?.executionRollsRemaining)
+    ? savedRoomState.executionRollsRemaining
+    : character.stats.exec + temporaryExecutionBonusThisTurn;
+  if (!savedRoomState) {
+    character.nextTurnExecBonus = 0;
+  }
   cooldownLockedProgramIds = new Set(
     Object.entries(programCooldowns)
       .filter(([, remaining]) => remaining > 0)
       .map(([programId]) => programId)
   );
-  Object.entries(programCooldowns).forEach(([programId, remaining]) => {
-    const nextRemaining = Math.max(0, remaining - 1);
+  if (!savedRoomState) {
+    Object.entries(programCooldowns).forEach(([programId, remaining]) => {
+      const nextRemaining = Math.max(0, remaining - 1);
 
-    if (nextRemaining > 0) {
-      programCooldowns[programId] = nextRemaining;
-    } else {
-      delete programCooldowns[programId];
-    }
-  });
+      if (nextRemaining > 0) {
+        programCooldowns[programId] = nextRemaining;
+      } else {
+        delete programCooldowns[programId];
+      }
+    });
+  }
   let isLevelComplete = false;
   let isRunDefeated = false;
   let turnPhase = "player";
@@ -2930,19 +3256,23 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         <p class="signal">Enemies</p>
         <div id="enemy-list"></div>
       </aside>
+      <aside class="save-game-panel" aria-label="Save game">
+        <button class="secondary-action save-game-action" type="button" id="save-game-action">Save Game</button>
+      </aside>
 
       <header class="room-hud">
         <div>
-          <p class="signal" id="room-meta">${levelNode.zoneName} / ${levelNode.label} / Turn 1</p>
+          <p class="signal" id="room-meta">${levelNode.zoneName} / ${levelNode.label}</p>
           <h2 id="room-title">${levelNode.label}</h2>
         </div>
+        ${renderCyclePanel(character.cycles, getLevelCycleReward(turnNumber, levelCycleMaxTurns), turnNumber, levelCycleMaxTurns)}
       </header>
 
       <section class="room-play-area" aria-label="Run map">
         <div class="map-player-info">
           ${renderRunCharacter(character)}
           ${renderArtifactStrip(character.artifacts || [])}
-          ${renderCharacterStats(character.stats, temporaryExecutionBonusThisTurn + character.nextTurnExecBonus)}
+          ${renderCharacterStats(character.stats, temporaryExecutionBonusThisTurn + character.nextTurnExecBonus, character.temporaryActionBoostTurns > 0 ? character.temporaryActionBoostAmount || 1 : 0)}
           ${renderProgressionTracker(character.progression)}
           <button class="secondary-action change-programs-action" type="button" id="change-programs-action">Change Programs</button>
           ${renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length)}
@@ -2966,6 +3296,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
               collectedArtifactTileIds,
               sigilPickups,
               collectedSigilTileIds,
+              cycleDrops,
               wallEdges
             )}
           </div>
@@ -3003,6 +3334,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   const rollConfirm = document.querySelector("#roll-confirm");
   const roomHoverTooltip = document.querySelector("#room-hover-tooltip");
   const changeProgramsButton = document.querySelector("#change-programs-action");
+  const saveGameButton = document.querySelector("#save-game-action");
   const selectedRollSlots = [];
   let currentCastSymbols = null;
   let allocatedProgramSymbols = {};
@@ -3014,11 +3346,11 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   let pendingAttack = null;
   let pendingSymbolAssignment = null;
   let pendingBlinkTargetTileIds = [];
-  let temporaryRevealTileIds = new Set();
-  let sightRangeBonus = 0;
-  let sightRangeBonusTurnsRemaining = 0;
-  let phaseThroughEnemiesTurnsRemaining = 0;
-  let phaseThroughWallsTurnsRemaining = 0;
+  let temporaryRevealTileIds = new Set(savedRoomState?.temporaryRevealTileIds || []);
+  let sightRangeBonus = savedRoomState?.sightRangeBonus || 0;
+  let sightRangeBonusTurnsRemaining = savedRoomState?.sightRangeBonusTurnsRemaining || 0;
+  let phaseThroughEnemiesTurnsRemaining = savedRoomState?.phaseThroughEnemiesTurnsRemaining || 0;
+  let phaseThroughWallsTurnsRemaining = savedRoomState?.phaseThroughWallsTurnsRemaining || 0;
 
   function getRoomDebugState() {
     return {
@@ -3047,8 +3379,13 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       collectedCaches: collectedCacheTileIds.length,
       collectedArtifacts: collectedArtifactTileIds.length,
       collectedSigils: collectedSigilTileIds.length,
+      cycles: character.cycles,
+      cycleDrops: cloneSaveData(cycleDrops),
       wallCount: wallEdges.length,
       usedPowerHubs: usedPowerHubTileIds.length,
+      levelCycleMaxTurns,
+      levelCycleReward: getLevelCycleReward(turnNumber, levelCycleMaxTurns),
+      levelCycleRewardAwarded,
       isMoveMode,
       isBlinkTargetMode,
       hasPendingAttack: Boolean(pendingAttack),
@@ -3070,6 +3407,42 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     };
   }
 
+  function buildCurrentSaveGame() {
+    return {
+      game: "Arcane Glitch",
+      version: saveGameVersion,
+      savedAt: new Date().toISOString(),
+      character: cloneSaveData(character),
+      currentRoom: {
+        nodeId: levelNode.id,
+        roomConfig: cloneSaveData(roomConfig),
+        room: cloneSaveData(room),
+        activeEnemies: cloneSaveData(activeEnemies),
+        characterPositionId,
+        exploredTileIds: [...exploredTileIds],
+        collectedThreadTileIds: [...collectedThreadTileIds],
+        collectedCacheTileIds: [...collectedCacheTileIds],
+        collectedArtifactTileIds: [...collectedArtifactTileIds],
+        collectedSigilTileIds: [...collectedSigilTileIds],
+        usedPowerHubTileIds: [...usedPowerHubTileIds],
+        cycleDrops: cloneSaveData(cycleDrops),
+        levelCycleMaxTurns,
+        levelCycleRewardAwarded,
+        spawnedEnemyCount,
+        turnNumber,
+        actionPointsRemaining,
+        executionRollsRemaining,
+        temporaryExecutionBonusThisTurn,
+        programCooldowns: { ...programCooldowns },
+        temporaryRevealTileIds: [...temporaryRevealTileIds],
+        sightRangeBonus,
+        sightRangeBonusTurnsRemaining,
+        phaseThroughEnemiesTurnsRemaining,
+        phaseThroughWallsTurnsRemaining,
+      },
+    };
+  }
+
   gameLog("room.start", {
     nodeId: levelNode.id,
     tier: levelNode.tier,
@@ -3078,8 +3451,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     threadTileIds: riftThreadTileIds,
     cacheTileIds,
     artifactTileIds,
-    sigilPickups,
-    wallCount: wallEdges.length,
+      sigilPickups,
+      cycleDrops,
+      wallCount: wallEdges.length,
     enemyTypes: roomConfig.enemyTypes,
     startState: getRoomDebugState(),
   });
@@ -3556,9 +3930,13 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     const execBonus = character.nextTurnExecBonus || 0;
     temporaryExecutionBonusThisTurn = execBonus;
-    actionPointsRemaining = character.stats.move;
+    const actionBoostAmount = character.temporaryActionBoostTurns > 0 ? character.temporaryActionBoostAmount || 1 : 0;
+    actionPointsRemaining = character.stats.move + actionBoostAmount;
     executionRollsRemaining = character.stats.exec + temporaryExecutionBonusThisTurn;
     character.nextTurnExecBonus = 0;
+    if (character.temporaryActionBoostTurns > 0) {
+      character.temporaryActionBoostTurns -= 1;
+    }
     return execBonus;
   }
 
@@ -3575,6 +3953,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
   function markProgramAllocated(programId, program, allocatedSymbols) {
     currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+    consumeAllocatedGlyphs(allocatedSymbols);
     allocatedProgramSymbols = {
       ...allocatedProgramSymbols,
       [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -3582,14 +3961,52 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     startProgramCooldown(program);
   }
 
+  function consumeAllocatedGlyphs(allocatedSymbols) {
+    allocatedSymbols
+      .filter((symbol) => symbol.artifactInstanceId)
+      .forEach((symbol) => {
+        const glyph = (character.artifacts || []).find((artifact) => (artifact.instanceId || artifact.id) === symbol.artifactInstanceId);
+
+        if (glyph) {
+          consumeArtifactUse(glyph);
+        }
+      });
+  }
+
+  function maybeDropCycles(tileId, enemy) {
+    if (!tileId || Math.random() >= 0.45) {
+      return null;
+    }
+
+    const amount = rollCycleDropAmount();
+    const existingDrop = cycleDrops.find((drop) => drop.tileId === tileId);
+
+    if (existingDrop) {
+      existingDrop.amount += amount;
+      return existingDrop;
+    }
+
+    const drop = {
+      id: `cycles-${enemy?.instanceId || Date.now()}-${Math.random().toString(16).slice(2)}`,
+      tileId,
+      amount,
+    };
+
+    cycleDrops.push(drop);
+    return drop;
+  }
+
   function dealEnemyIntegrityDamage(enemy, rawDamage, defenseStat) {
     const enemyIntegrityBeforeDamage = enemy.stats.integrity;
+    const defeatedTileId = enemy.positionId;
     const dealtDamage = Math.max(0, rawDamage - (enemy.stats[defenseStat] || 0));
     enemy.stats.integrity = Math.max(0, enemy.stats.integrity - dealtDamage);
     let didLevelUp = false;
+    let cycleDrop = null;
 
     if (enemyIntegrityBeforeDamage > 0 && enemy.stats.integrity <= 0) {
       didLevelUp = addCharacterXp(character, enemy.xpValue);
+      cycleDrop = maybeDropCycles(defeatedTileId, enemy);
       enemy.positionId = null;
       enemy.confusedTurns = 0;
       enemy.stunnedTurns = 0;
@@ -3599,6 +4016,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       dealtDamage,
       enemyIntegrityBeforeDamage,
       didDefeat: enemyIntegrityBeforeDamage > 0 && enemy.stats.integrity <= 0,
+      cycleDrop,
       didLevelUp,
     };
   }
@@ -3653,16 +4071,24 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       collectedArtifactTileIds,
       sigilPickups,
       collectedSigilTileIds,
+      cycleDrops,
       wallEdges
     );
     enemyInfo.classList.toggle("hidden", !visibleEnemies.length);
     enemyList.innerHTML = visibleEnemies.map(renderEnemyInfo).join("");
-    document.querySelector(".artifact-strip").outerHTML = renderArtifactStrip(character.artifacts || []);
+    document.querySelector(".artifact-strip").outerHTML = renderArtifactStrip(character.artifacts || [], pendingSymbolAssignment);
     document.querySelector("#character-stats").outerHTML = renderCharacterStats(
       character.stats,
-      temporaryExecutionBonusThisTurn + character.nextTurnExecBonus
+      temporaryExecutionBonusThisTurn + character.nextTurnExecBonus,
+      character.temporaryActionBoostTurns > 0 ? character.temporaryActionBoostAmount || 1 : 0
     );
     document.querySelector(".progression-tracker").outerHTML = renderProgressionTracker(character.progression);
+    document.querySelector(".cycle-panel").outerHTML = renderCyclePanel(
+      character.cycles,
+      getLevelCycleReward(turnNumber, levelCycleMaxTurns),
+      turnNumber,
+      levelCycleMaxTurns
+    );
     document.querySelector(".thread-tracker").outerHTML = renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length);
     moveButton.disabled = !isPlayerPhase || !canMove;
     moveButton.textContent = securedRoom ? "Move (Free)" : actionPointsRemaining > 0 ? `Move (${actionPointsRemaining})` : "Actions Spent";
@@ -3677,7 +4103,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     turnPhaseBanner.textContent = isPlayerPhase ? "Player Turn" : "Glitchspawn Turn";
     turnPhaseBanner.classList.toggle("glitch-phase", !isPlayerPhase);
     document.querySelector(".room-footer").classList.toggle("glitch-phase-active", !isPlayerPhase);
-    roomMeta.textContent = `${levelNode.zoneName} / ${levelNode.label} / Turn ${turnNumber}`;
+    roomMeta.textContent = `${levelNode.zoneName} / ${levelNode.label}`;
 
     if (isRunDefeated) {
       roomStatus.textContent = "Integrity depleted. Run terminated.";
@@ -4099,7 +4525,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   }
 
   function updateProgramAvailability() {
-    programListItems.innerHTML = renderPrograms(character.programs, currentCastSymbols, {
+    programListItems.innerHTML = renderPrograms(character.programs, getCastSymbolsWithGlyphs(), {
       showPhysicalFallback: isRunecastingActive,
       allocations: allocatedProgramSymbols,
       cacheLimit: character.stats.cache,
@@ -4109,7 +4535,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   }
 
   function hasUsableCastSymbols() {
-    return Array.isArray(currentCastSymbols) && currentCastSymbols.some((symbol) => !symbol.spent && !symbol.blank);
+    return Array.isArray(currentCastSymbols) && getCastSymbolsWithGlyphs().some((symbol) => !symbol.spent && !symbol.blank);
   }
 
   function finishRunecastingIfNoOptions(statusText = "") {
@@ -4133,6 +4559,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
   function resolvePlayerTileEntry() {
     let status = "";
+    const cycleDropIndex = cycleDrops.findIndex((drop) => drop.tileId === characterPositionId);
+
+    if (cycleDropIndex >= 0) {
+      const [cycleDrop] = cycleDrops.splice(cycleDropIndex, 1);
+      character.cycles += cycleDrop.amount;
+      status = `${cycleDrop.amount} Cycles collected.`;
+      gameLog("tile.cyclesCollected", { tileId: characterPositionId, amount: cycleDrop.amount, cycles: character.cycles, state: getRoomDebugState() });
+    }
 
     if (riftThreadTileIds.includes(characterPositionId) && !collectedThreadTileIds.includes(characterPositionId)) {
       collectedThreadTileIds.push(characterPositionId);
@@ -4202,9 +4636,29 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       return;
     }
 
+    let completionStatus = status || "Rift closed. Level complete.";
+
+    if (!levelCycleRewardAwarded) {
+      const cycleReward = getLevelCycleReward(turnNumber, levelCycleMaxTurns);
+      character.cycles += cycleReward;
+      levelCycleRewardAwarded = true;
+      completionStatus = `${completionStatus} +${cycleReward} Cycles.`;
+      gameLog("level.cyclesAwarded", {
+        reward: cycleReward,
+        turnNumber,
+        maxTurns: levelCycleMaxTurns,
+        cycles: character.cycles,
+        state: getRoomDebugState(),
+      });
+    }
+
     updateRoom();
-    roomStatus.textContent = status || "Rift closed. Level complete.";
-    window.setTimeout(() => showLevelComplete(character, levelNode.id), 500);
+    roomStatus.textContent = completionStatus;
+    window.setTimeout(() => showLevelComplete(character, levelNode.id, {
+      cycleReward: levelCycleRewardAwarded ? getLevelCycleReward(turnNumber, levelCycleMaxTurns) : 0,
+      turnNumber,
+      maxTurns: levelCycleMaxTurns,
+    }), 500);
   }
 
   function getCacheProgramOptions() {
@@ -4224,18 +4678,92 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   }
 
   function applyArtifact(artifact) {
-    character.artifacts = character.artifacts || [];
-    character.artifacts.push(artifact);
-    const amount = Number.isFinite(artifact.amount) ? artifact.amount : 1;
+    return applyArtifactToCharacter(character, artifact, levelNode?.sigilProfile || {});
+  }
 
-    if (artifact.stat === "maxIntegrity") {
-      character.stats.maxIntegrity += amount;
-      character.stats.integrity = Math.min(character.stats.maxIntegrity, character.stats.integrity + amount);
+  function consumeArtifactUse(artifact) {
+    artifact.uses = Math.max(0, (artifact.uses || 0) - 1);
+
+    if (artifact.uses <= 0) {
+      const artifactInstanceId = artifact.instanceId || artifact.id;
+      character.artifacts = (character.artifacts || []).filter(
+        (item) => (item.instanceId || item.id) !== artifactInstanceId
+      );
+    }
+  }
+
+  function useArtifact(artifactInstanceId) {
+    const artifact = (character.artifacts || []).find((item) => (item.instanceId || item.id) === artifactInstanceId);
+
+    if (!artifact || artifact.uses <= 0) {
       return;
     }
 
-    if (Number.isFinite(character.stats[artifact.stat])) {
-      character.stats[artifact.stat] += amount;
+    if (artifact.effect?.type === "sigilGlyph") {
+      if (!isRunecastingActive) {
+        roomStatus.textContent = `${artifact.name} can be used while Sigil-Casting.`;
+        return;
+      }
+
+      roomStatus.textContent = pendingSymbolAssignment
+        ? `${artifact.name} does not match the selected program requirement.`
+        : `Choose a program first, then click ${artifact.name} to spend it.`;
+      return;
+    }
+
+    if (artifact.effect?.type === "damageAdjacentAll") {
+      const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, getPlayerWallEdges());
+
+      if (!adjacentEnemyTileIds.length) {
+        roomStatus.textContent = `${artifact.name} needs surrounding enemies.`;
+        return;
+      }
+
+      const amount = Number.isFinite(artifact.effect.amount) ? artifact.effect.amount : 1;
+      const damagedEnemies = adjacentEnemyTileIds
+        .map((tileId) => getEnemyAtTile(activeEnemies, tileId))
+        .filter(Boolean)
+        .map((enemy) => ({ enemy, tileId: enemy.positionId, result: dealEnemyIntegrityDamage(enemy, amount) }));
+      const didLevelUp = damagedEnemies.some((item) => item.result.didLevelUp);
+
+      consumeArtifactUse(artifact);
+      updateRoom();
+      damagedEnemies.forEach((item) => showDamageIndicator(item.tileId, item.result.dealtDamage, "enemy"));
+      roomStatus.textContent = `${artifact.name} dealt ${amount} damage to ${damagedEnemies.length} surrounding ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`;
+      finishRunecastingIfNoOptions(roomStatus.textContent);
+      if (didLevelUp) {
+        window.setTimeout(showImmediateLevelReward, 120);
+      }
+      if (damagedEnemies.some((item) => item.result.didDefeat) && !hasLivingEnemies()) {
+        window.setTimeout(showAllDerezzedNotice, didLevelUp ? 260 : 120);
+      }
+      return;
+    }
+
+    if (artifact.effect?.type === "damageAdjacent") {
+      const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, getPlayerWallEdges());
+
+      if (!adjacentEnemyTileIds.length) {
+        roomStatus.textContent = `${artifact.name} needs an adjacent enemy.`;
+        return;
+      }
+
+      isMoveMode = false;
+      isPhysicalTargetMode = true;
+      isBlinkTargetMode = false;
+      pendingPhysicalDamage = Number.isFinite(artifact.effect.amount) ? artifact.effect.amount : 1;
+      pendingAttack = {
+        artifactInstanceId,
+        label: artifact.name,
+        damage: pendingPhysicalDamage,
+        defenseStat: "artifactDefense",
+        damageType: "artifact",
+        targetTileIds: adjacentEnemyTileIds,
+        consumeArtifactUse: true,
+      };
+      roomStage.classList.remove("movement-active", "dragging");
+      updateRoom();
+      roomStatus.textContent = `Choose an adjacent enemy for ${artifact.name}.`;
     }
   }
 
@@ -4246,7 +4774,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   }
 
   function showArtifactChoice(tileId) {
-    const artifactOptions = getRandomOptions(artifacts, 2);
+    const artifactOptions = Array.from({ length: 2 }, () => rollArtifactFromPool()).filter(Boolean);
     const overlay = document.createElement("div");
 
     gameLog("artifact.popup.open", {
@@ -4265,10 +4793,11 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
             artifactOptions.length
               ? artifactOptions
                   .map(
-                    (artifact) => `
-                      <button class="secondary-action reward-choice artifact-choice" type="button" data-artifact-choice="${artifact.id}">
+                    (artifact, index) => `
+                      <button class="secondary-action reward-choice artifact-choice" type="button" data-artifact-choice="${index}">
+                        <img class="artifact-choice-img" src="${getArtifactImage(artifact)}" alt="">
                         <strong>${artifact.name}</strong>
-                        <small>${artifact.label}</small>
+                        <small>${getArtifactDisplayLabel(artifact)}</small>
                       </button>
                     `
                   )
@@ -4283,17 +4812,17 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     overlay.querySelectorAll("[data-artifact-choice]").forEach((button) => {
       button.addEventListener("click", () => {
-        const artifact = artifactOptions.find((option) => option.id === button.dataset.artifactChoice);
+        const artifact = artifactOptions[Number(button.dataset.artifactChoice)];
 
         if (!artifact) {
           return;
         }
 
-        applyArtifact(artifact);
+        const acquiredArtifact = applyArtifact(artifact);
         overlay.remove();
         updateRoom();
-        roomStatus.textContent = `${artifact.name} acquired. ${artifact.label}.`;
-        gameLog("tile.artifactCollected", { tileId, artifactId: artifact.id, state: getRoomDebugState() });
+        roomStatus.textContent = `${acquiredArtifact.name} acquired. ${getArtifactDisplayLabel(acquiredArtifact)}.`;
+        gameLog("tile.artifactCollected", { tileId, artifactId: acquiredArtifact.id, state: getRoomDebugState() });
       });
     });
   }
@@ -4365,14 +4894,6 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     const requiredCount = Math.min(character.stats.cache, library.length);
     let selectedProgramIds = character.programs.filter((programId) => library.includes(programId)).slice(0, requiredCount);
 
-    if (selectedProgramIds.length < requiredCount) {
-      library.forEach((programId) => {
-        if (selectedProgramIds.length < requiredCount && !selectedProgramIds.includes(programId)) {
-          selectedProgramIds.push(programId);
-        }
-      });
-    }
-
     const overlay = document.createElement("div");
     overlay.className = "cache-upgrade-overlay program-library-overlay";
 
@@ -4405,7 +4926,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
               </div>
             </article>
           </div>
-          <button class="primary-action" type="button" id="confirm-program-library" ${selectedProgramIds.length === requiredCount ? "" : "disabled"}>Confirm Loadout</button>
+          <button class="primary-action" type="button" id="confirm-program-library">Confirm Loadout</button>
         </section>
       `;
     }
@@ -4427,10 +4948,6 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       });
 
       overlay.querySelector("#confirm-program-library").addEventListener("click", () => {
-        if (selectedProgramIds.length !== requiredCount) {
-          return;
-        }
-
         character.programs = [...selectedProgramIds];
         overlay.remove();
         updateProgramAvailability();
@@ -4447,6 +4964,35 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
   changeProgramsButton.addEventListener("click", () => {
     showProgramLibraryEquip("Choose equipped programs.");
+  });
+
+  saveGameButton.addEventListener("click", () => {
+    downloadJsonSave(buildCurrentSaveGame());
+    roomStatus.textContent = "Game saved to file.";
+    gameLog("save.downloaded", getRoomDebugState());
+  });
+
+  document.querySelector(".room-screen").addEventListener("click", (event) => {
+    const artifactButton = event.target.closest("[data-artifact-use]");
+
+    if (!artifactButton || turnPhase !== "player" || isLevelComplete || isRunDefeated) {
+      return;
+    }
+
+    const artifact = (character.artifacts || []).find((item) => (item.instanceId || item.id) === artifactButton.dataset.artifactUse);
+    const glyphSymbol =
+      artifact?.effect?.type === "sigilGlyph"
+        ? getAvailableSigilGlyphSymbols(character).find(
+            (symbol) => symbol.artifactInstanceId === (artifact.instanceId || artifact.id)
+          )
+        : null;
+
+    if (glyphSymbol && pendingSymbolAssignment?.candidateResultIndices?.has(glyphSymbol.resultIndex)) {
+      resolveAssignedProgram(pendingSymbolAssignment.programId, glyphSymbol);
+      return;
+    }
+
+    useArtifact(artifactButton.dataset.artifactUse);
   });
 
   function showCacheUpgrade() {
@@ -4520,6 +5066,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       return;
     }
 
+    const blankDieSideCount = rollLevelRewardDieSideCount();
     const overlay = document.createElement("div");
     overlay.className = "cache-upgrade-overlay level-reward-overlay";
     overlay.innerHTML = `
@@ -4531,8 +5078,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
             <h3>Add Blank Die</h3>
             <div class="reward-choice-grid">
               <button class="secondary-action reward-choice" type="button" id="add-blank-level-die">
-                <strong>Blank Die</strong>
-                <small>Six empty faces for future sigils.</small>
+                <strong>${blankDieSideCount}-Sided Blank Die</strong>
+                <small>${blankDieSideCount} empty faces for future sigils.</small>
               </button>
             </div>
           </article>
@@ -4542,11 +5089,11 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
 
     document.querySelector(".room-screen").appendChild(overlay);
     overlay.querySelector("#add-blank-level-die").addEventListener("click", () => {
-      character.loadout.push(createBlankDie());
+      character.loadout.push(createBlankDie(blankDieSideCount));
       character.progression.pendingRewards = Math.max(0, (character.progression.pendingRewards || 0) - 1);
       overlay.remove();
       updateRoom();
-      roomStatus.textContent = "Blank die added to the pool.";
+      roomStatus.textContent = `${blankDieSideCount}-sided blank die added to the pool.`;
 
       if (character.progression.pendingRewards > 0) {
         window.setTimeout(showImmediateLevelReward, 120);
@@ -4603,6 +5150,12 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     gameLog("sigilCast.panelActivated", getRoomDebugState());
   }
 
+  function getCastSymbolsWithGlyphs() {
+    return Array.isArray(currentCastSymbols)
+      ? [...currentCastSymbols, ...getAvailableSigilGlyphSymbols(character)]
+      : currentCastSymbols;
+  }
+
   rollButton.addEventListener("click", () => {
     if (turnPhase !== "player" || isRunecastingActive || isLevelComplete || actionPointsRemaining <= 0) {
       return;
@@ -4611,7 +5164,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
   });
 
   function getAssignableProgramSymbols(program, selectedSymbols = []) {
-    if (!Array.isArray(currentCastSymbols) || !program?.requirement?.length) {
+    const castSymbols = getCastSymbolsWithGlyphs();
+
+    if (!Array.isArray(castSymbols) || !program?.requirement?.length) {
       return [];
     }
 
@@ -4622,7 +5177,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       return [];
     }
 
-    return currentCastSymbols.filter(
+    return castSymbols.filter(
       (symbol) =>
         !symbol.spent &&
         !symbol.blank &&
@@ -4704,6 +5259,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         const execAmount = Number.isFinite(effect.amount) ? effect.amount : 1;
         const currentExecAmount = Number.isFinite(effect.currentAmount) ? effect.currentAmount : 0;
         currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+        consumeAllocatedGlyphs(allocatedSymbols);
         allocatedProgramSymbols = {
           ...allocatedProgramSymbols,
           [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -4744,6 +5300,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
 
         currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+        consumeAllocatedGlyphs(allocatedSymbols);
         allocatedProgramSymbols = {
           ...allocatedProgramSymbols,
           [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -5058,6 +5615,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
 
         currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+        consumeAllocatedGlyphs(allocatedSymbols);
         allocatedProgramSymbols = {
           ...allocatedProgramSymbols,
           [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -5138,6 +5696,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
 
         currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+        consumeAllocatedGlyphs(allocatedSymbols);
         allocatedProgramSymbols = {
           ...allocatedProgramSymbols,
           [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -5178,6 +5737,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         }
 
         currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+        consumeAllocatedGlyphs(allocatedSymbols);
         allocatedProgramSymbols = {
           ...allocatedProgramSymbols,
           [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -5229,6 +5789,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     }
 
     currentCastSymbols = markSymbolsSpent(currentCastSymbols, allocatedSymbols);
+    consumeAllocatedGlyphs(allocatedSymbols);
     allocatedProgramSymbols = {
       ...allocatedProgramSymbols,
       [programId]: [...(allocatedProgramSymbols[programId] || []), ...allocatedSymbols],
@@ -5263,7 +5824,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
     }
 
     if (programId === "physical-damage") {
-      const availableSymbols = currentCastSymbols.filter((symbol) => !symbol.spent && !symbol.blank);
+      const availableSymbols = currentCastSymbols.filter((symbol) => !symbol.spent && !symbol.blank && !symbol.artifactInstanceId);
 
       if (!availableSymbols.length) {
         return;
@@ -5352,7 +5913,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       }
     }
 
-    if (!canCastProgram(program, currentCastSymbols, cooldownLockedProgramIds)) {
+    if (!canCastProgram(program, getCastSymbolsWithGlyphs(), cooldownLockedProgramIds)) {
       roomStatus.textContent = `${program.name} requires additional sigils.`;
       return;
     }
@@ -5661,10 +6222,12 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         const enemyXp = targetEnemy.xpValue;
         const enemyName = targetEnemy.name;
         const attackLabel = pendingAttack.label;
+        const defeatedTileId = targetEnemy.positionId;
         const previousCharacterRect = captureCharacterTokenRect();
         const didLevelUp = addCharacterXp(character, enemyXp);
 
         targetEnemy.stats.integrity = 0;
+        maybeDropCycles(defeatedTileId, targetEnemy);
         targetEnemy.positionId = null;
         targetEnemy.confusedTurns = 0;
         targetEnemy.stunnedTurns = 0;
@@ -5701,12 +6264,15 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         return;
       }
 
-      const dealtDamage = Math.max(0, pendingAttack.damage - targetEnemy.stats[pendingAttack.defenseStat]);
+      const dealtDamage = Math.max(0, pendingAttack.damage - (targetEnemy.stats[pendingAttack.defenseStat] || 0));
       const enemyIntegrityBeforeDamage = targetEnemy.stats.integrity;
       targetEnemy.stats.integrity = Math.max(0, targetEnemy.stats.integrity - dealtDamage);
       const damageLabel = pendingAttack.label;
       const damageType = pendingAttack.damageType;
       const healAmount = pendingAttack.healAmount || 0;
+      const artifactToConsume = pendingAttack.consumeArtifactUse
+        ? (character.artifacts || []).find((artifact) => (artifact.instanceId || artifact.id) === pendingAttack.artifactInstanceId)
+        : null;
       const integrityBeforeHeal = character.stats.integrity;
       isPhysicalTargetMode = false;
       pendingPhysicalDamage = 0;
@@ -5716,7 +6282,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
       let didLevelUp = false;
 
       if (enemyIntegrityBeforeDamage > 0 && targetEnemy.stats.integrity <= 0) {
+        const defeatedTileId = targetEnemy.positionId;
         didLevelUp = addCharacterXp(character, targetEnemy.xpValue);
+        maybeDropCycles(defeatedTileId, targetEnemy);
         targetEnemy.positionId = null;
         targetEnemy.stunnedTurns = 0;
         damageStatus = `${damageLabel} dealt ${dealtDamage} ${damageType} damage. ${targetEnemy.name} derezzed. +${targetEnemy.xpValue} XP.`;
@@ -5731,6 +6299,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode) {
         character.stats.integrity = Math.min(character.stats.maxIntegrity, character.stats.integrity + healAmount);
         const healedIntegrity = character.stats.integrity - integrityBeforeHeal;
         damageStatus += ` Healed ${healedIntegrity} Integrity.`;
+      }
+      if (artifactToConsume) {
+        consumeArtifactUse(artifactToConsume);
       }
 
       updateRoom();
@@ -6002,7 +6573,11 @@ function setCraftingSigilSource(character, source, sigil) {
       return false;
     }
 
-    loadoutDie.faces = Array.from({ length: customDieFaceCount }, (_, index) => loadoutDie.faces?.[index] || null);
+    loadoutDie.faces = Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, index) => loadoutDie.faces?.[index] || null);
+    if (source.faceIndex < 0 || source.faceIndex >= loadoutDie.faces.length) {
+      return false;
+    }
+
     loadoutDie.faces[source.faceIndex] = sigil || null;
     return true;
   }
@@ -6222,7 +6797,7 @@ function showLevelMap(character) {
             ${levelNodes
               .map((node) => {
                 const isUnlocked = mapState.unlockedNodes.includes(node.id) || mapState.completedNodes.includes(node.id);
-                const isComplete = mapState.completedNodes.includes(node.id);
+                const isComplete = mapState.completedNodes.includes(node.id) || mapState.visitedMarkets.includes(node.id);
                 const isSelected = selectedNode === node.id;
                 const stateClass = isUnlocked ? "unlocked" : "locked";
 
@@ -6272,6 +6847,7 @@ function showLevelMap(character) {
   function updateSelectedLevelNode(nodeId) {
     const node = levelNodes.find((item) => item.id === nodeId) || levelNodes[0];
     const isUnlocked = mapState.unlockedNodes.includes(nodeId) || mapState.completedNodes.includes(nodeId);
+    const isVisitedMarket = node.type === "market" && mapState.visitedMarkets.includes(nodeId);
 
     if (!isUnlocked) {
       return;
@@ -6279,8 +6855,8 @@ function showLevelMap(character) {
 
     mapState.selectedNode = nodeId;
     levelNodeButtons.forEach((node) => node.classList.toggle("active", node.dataset.levelNode === nodeId));
-    enterLevel.disabled = false;
-    enterLevel.textContent = `Enter ${node.label}`;
+    enterLevel.disabled = isVisitedMarket;
+    enterLevel.textContent = isVisitedMarket ? `${node.label} Visited` : `Enter ${node.label}`;
     levelMapStatus.textContent = `${node.label} - Sigil Occurrence Percentages:`;
     levelSigilRatesSlot.innerHTML = renderSigilSpawnRates(node);
   }
@@ -6290,16 +6866,196 @@ function showLevelMap(character) {
   });
 
   craftingButton.addEventListener("click", () => showSigilCraftingScreen(character));
-  enterLevel.addEventListener("click", () => showInitialRoom(character, mapState.selectedNode));
+  enterLevel.addEventListener("click", () => {
+    const node = levelNodes.find((item) => item.id === mapState.selectedNode) || levelNodes[0];
+
+    if (node.type === "market") {
+      if (mapState.visitedMarkets.includes(node.id)) {
+        return;
+      }
+
+      showMarketEntryPrompt(character, node);
+      return;
+    }
+
+    showInitialRoom(character, mapState.selectedNode);
+  });
   updateSelectedLevelNode(selectedNode);
   centerWorldMapOnNode(mapState.selectedNode);
 }
 
-function showLevelComplete(character, completedNodeId) {
+function getMarketArtifactRarities(node) {
+  const tier = Math.max(1, node?.tier || 1);
+  const firstWeights = [
+    { rarity: "common", chance: Math.max(30, 62 - tier * 5) },
+    { rarity: "uncommon", chance: Math.min(45, 24 + tier * 4) },
+    { rarity: "rare", chance: Math.min(25, 4 + tier * 3) },
+  ];
+  const firstRarity = rollWeightedEntry(firstWeights, firstWeights[0]).rarity;
+  const secondWeights = firstWeights.filter((entry) => entry.rarity !== firstRarity);
+  const secondRarity = rollWeightedEntry(secondWeights, secondWeights[0]).rarity;
+
+  return [firstRarity, secondRarity];
+}
+
+function createMarketOffers(node) {
+  const artifactOffers = getMarketArtifactRarities(node)
+    .map((rarity) => rollArtifactFromRarity(rarity))
+    .filter(Boolean)
+    .map((artifact) => ({
+      id: `market-${artifact.instanceId}`,
+      type: "artifact",
+      artifact,
+      cost: getArtifactCycleCost(artifact),
+    }));
+  const sigilGlyphTemplate = artifacts.find((artifact) => artifact.id === "sigilGlyph");
+  const sigilGlyph = sigilGlyphTemplate
+    ? {
+        ...sigilGlyphTemplate,
+        instanceId: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        sigil: rollSigilFromProfile(node?.sigilProfile || {}),
+      }
+    : null;
+
+  return [
+    ...artifactOffers,
+    ...(sigilGlyph
+      ? [{
+          id: `market-${sigilGlyph.instanceId}`,
+          type: "sigilGlyph",
+          artifact: sigilGlyph,
+          cost: getSigilGlyphCycleCost(sigilGlyph),
+        }]
+      : []),
+  ];
+}
+
+function showMarketEntryPrompt(character, node) {
+  const overlay = document.createElement("div");
+
+  overlay.className = "cache-upgrade-overlay market-entry-overlay";
+  overlay.innerHTML = `
+    <section class="cache-upgrade-panel market-entry-panel" aria-labelledby="market-entry-title">
+      <p class="signal">${node.zoneName} Market</p>
+      <h2 id="market-entry-title">${node.label}</h2>
+      <p>You may only visit each shop once. Do you want to continue?</p>
+      <div class="market-entry-actions">
+        <button class="secondary-action" type="button" id="cancel-market-entry">Go Back</button>
+        <button class="primary-action" type="button" id="confirm-market-entry">Continue</button>
+      </div>
+    </section>
+  `;
+
+  document.querySelector(".level-map-screen")?.appendChild(overlay);
+  overlay.querySelector("#cancel-market-entry").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#confirm-market-entry").addEventListener("click", () => {
+    const mapState = ensureMapState(character);
+
+    if (!mapState.visitedMarkets.includes(node.id)) {
+      mapState.visitedMarkets.push(node.id);
+    }
+    overlay.remove();
+    completeLevelNode(character, node.id);
+    showMarket(character, node);
+  });
+}
+
+function showMarket(character, node) {
+  character.cycles = Number.isFinite(character.cycles) ? character.cycles : 0;
+  character.stats.maxIntegrity = character.stats.maxIntegrity || character.stats.integrity;
+  const offers = createMarketOffers(node);
+  const purchasedOfferIds = new Set();
+  let marketStatus = `${character.cycles} Cycles available.`;
+
+  app.innerHTML = `
+    <section class="level-map-screen market-screen" aria-labelledby="market-title">
+      <div class="level-complete-panel market-panel">
+        <p class="signal">${node.zoneName} Market</p>
+        <h2 id="market-title">${node.label}</h2>
+        <div class="market-cycles">
+          <img src="${cyclesCurrencyImage}" alt="">
+          <span>Cycles</span>
+          <strong id="market-cycle-total">${character.cycles}</strong>
+        </div>
+        <div class="market-offers" id="market-offers"></div>
+        <p id="market-status">${marketStatus}</p>
+        <button class="primary-action" type="button" id="leave-market">Leave</button>
+      </div>
+    </section>
+  `;
+
+  const offersSlot = document.querySelector("#market-offers");
+  const marketStatusElement = document.querySelector("#market-status");
+  const cycleTotal = document.querySelector("#market-cycle-total");
+
+  function renderMarketOffers() {
+    offersSlot.innerHTML = offers
+      .map((offer) => {
+        const artifact = offer.artifact;
+        const isPurchased = purchasedOfferIds.has(offer.id);
+        const canAfford = character.cycles >= offer.cost;
+        const sigil = artifact.sigil ? getSigilDefinition(artifact.sigil.element, artifact.sigil.face) : null;
+        const rarityText = artifact.effect?.type === "sigilGlyph" && sigil
+          ? `${sigilRarityLabels[artifact.sigil.face || 1]} ${sigil.name}`
+          : `${artifact.rarity || "common"} artifact`;
+
+        return `
+          <article class="market-offer ${isPurchased ? "purchased" : ""}">
+            <img class="market-offer-img" src="${getArtifactImage(artifact)}" alt="">
+            <div>
+              <strong>${artifact.name}</strong>
+              <small>${rarityText}</small>
+              <p>${getArtifactDisplayLabel(artifact)}</p>
+            </div>
+            <button class="secondary-action market-buy-action" type="button" data-market-offer="${offer.id}" ${isPurchased || !canAfford ? "disabled" : ""}>
+              ${isPurchased ? "Bought" : `${offer.cost} Cycles`}
+            </button>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  offersSlot.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-market-offer]");
+
+    if (!button) {
+      return;
+    }
+
+    const offer = offers.find((item) => item.id === button.dataset.marketOffer);
+
+    if (!offer || purchasedOfferIds.has(offer.id)) {
+      return;
+    }
+
+    if (character.cycles < offer.cost) {
+      marketStatus = "Not enough Cycles.";
+      marketStatusElement.textContent = marketStatus;
+      return;
+    }
+
+    character.cycles -= offer.cost;
+    const acquiredArtifact = applyArtifactToCharacter(character, offer.artifact, node.sigilProfile || {});
+    purchasedOfferIds.add(offer.id);
+    cycleTotal.textContent = character.cycles;
+    marketStatus = `${acquiredArtifact.name} purchased.`;
+    marketStatusElement.textContent = marketStatus;
+    renderMarketOffers();
+  });
+
+  document.querySelector("#leave-market").addEventListener("click", () => showLevelMap(character));
+  renderMarketOffers();
+}
+
+function showLevelComplete(character, completedNodeId, completionSummary = {}) {
   const completedNode = levelNodes.find((node) => node.id === completedNodeId) || levelNodes[0];
   completeLevelNode(character, completedNodeId);
   gameLog("level.completeScreen", {
     completedNodeId,
+    cycleReward: completionSummary.cycleReward || 0,
+    turnNumber: completionSummary.turnNumber || 0,
+    maxTurns: completionSummary.maxTurns || 0,
     pendingRewards: character.progression.pendingRewards,
     mapState: character.mapState,
   });
@@ -6312,6 +7068,12 @@ function showLevelComplete(character, completedNodeId) {
         <div class="level-complete-character">
           ${renderRunCharacter(character)}
           ${renderProgressionTracker(character.progression)}
+        </div>
+        <div class="level-cycle-summary">
+          <img src="${cyclesCurrencyImage}" alt="">
+          <span>Cycles Reward</span>
+          <strong>+${completionSummary.cycleReward || 0}</strong>
+          <small>${completionSummary.turnNumber || 0}/${completionSummary.maxTurns || 0} turns</small>
         </div>
         <p>New route signals are available on the Level Map.</p>
         <button class="primary-action" type="button" id="return-level-map">Return to Level Map</button>
@@ -6396,6 +7158,8 @@ function showLevelReward(character) {
     showLevelMap(character);
   }
 
+  const blankDieSideCount = rollLevelRewardDieSideCount();
+
   app.innerHTML = `
     <section class="level-map-screen" aria-labelledby="level-reward-title">
       <div class="level-complete-panel reward-panel">
@@ -6406,8 +7170,8 @@ function showLevelReward(character) {
             <h3>Add Blank Die</h3>
             <div class="reward-choice-grid">
               <button class="secondary-action reward-choice" type="button" id="add-level-map-blank-die">
-                <strong>Blank Die</strong>
-                <small>Six empty faces for future sigils.</small>
+                <strong>${blankDieSideCount}-Sided Blank Die</strong>
+                <small>${blankDieSideCount} empty faces for future sigils.</small>
               </button>
             </div>
           </article>
@@ -6417,7 +7181,7 @@ function showLevelReward(character) {
   `;
 
   document.querySelector("#add-level-map-blank-die").addEventListener("click", () => {
-    character.loadout.push(createBlankDie());
+    character.loadout.push(createBlankDie(blankDieSideCount));
     finishRewardChoice();
   });
 
@@ -6612,10 +7376,12 @@ function showCharacterSetup() {
       stats: { ...startingStats },
       progression: { ...startingProgression },
       artifacts: [],
+      cycles: 0,
       mapState: {
         selectedNode: startingMapState.selectedNode,
         completedNodes: [...startingMapState.completedNodes],
         unlockedNodes: [...startingMapState.unlockedNodes],
+        visitedMarkets: [...startingMapState.visitedMarkets],
       },
     });
   });
@@ -6627,6 +7393,33 @@ function showCharacterSetup() {
 startRunButton.addEventListener("click", () => {
   startBackgroundMusic();
   showCharacterSetup();
+});
+
+loadGameButton.addEventListener("click", () => {
+  loadGameFileInput.click();
+});
+
+loadGameFileInput.addEventListener("change", () => {
+  const file = loadGameFileInput.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.addEventListener("load", () => {
+    try {
+      loadSaveGame(JSON.parse(reader.result));
+    } catch (error) {
+      gameError("save.load.failed", { message: error.message });
+      window.alert(`Could not load save: ${error.message}`);
+    } finally {
+      loadGameFileInput.value = "";
+    }
+  });
+
+  reader.readAsText(file);
 });
 
 testModeButton.addEventListener("click", () => {

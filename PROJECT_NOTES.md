@@ -13,6 +13,11 @@ No build step, package manager, or dev server is required right now.
 - Recent structured events are also stored in `window.arcaneDebugEvents` for copying from DevTools.
 - Global `error`, `unhandledrejection`, and `pagehide` events are logged to help diagnose crashes or unexpected tab closes.
 
+## Project Maintenance
+
+- Keep this file updated when implementing important gameplay, UI, data, save/load, asset, or generation changes. The goal is to preserve project context for future sessions.
+- Minor visual tuning does not need a full writeup, but changes to rules, mechanics, metadata formats, room generation, enemies, programs, progression, or persistence should be reflected here.
+
 ## Main Files
 
 - `index.html` is the browser entry point and main menu shell.
@@ -40,7 +45,7 @@ The metadata files are JavaScript text files loaded before `main.js` so the game
   - `sightRangeBonus`: increases line of sight by `amount` for `playerTurns`.
 - Programs support a `cooldown` number. When a program is used, any cooldown greater than 0 disables that program immediately and for the next affected player turn while the counter ticks down.
 - `metadata/glitchspawn.js` stores enemy stats, XP values, image paths, behavior tags, and accuracy.
-- `metadata/artifacts.js` stores stat artifact rewards. Supported `stat` values are `cache`, `exec`, `move`, and `maxIntegrity`.
+- `metadata/artifacts.js` stores permanent and temporary artifact rewards with `rarity`, `type`, and optional `effect` data. Permanent stat artifacts support `cache`, `exec`, `move`, and `maxIntegrity`.
 - More complex effects still require `main.js` support, but simple damage/heal/stat entries can be added in metadata.
 
 ## Asset Folders
@@ -110,12 +115,22 @@ The next major design pass should shift the prototype toward a pixel-art tactica
 1. Main menu has a sci-fi black/white theme with falling Runecode symbols.
 2. Background music starts on menu load when the browser allows autoplay, otherwise it starts on the first player interaction and loops through the game.
 3. `Start Run` opens character setup.
-4. Character setup requires selecting one character and crafting one starting die.
-5. The starting die has 6 face slots, starts blank, and the player assigns 3 common elemental sigils before the run.
-6. Entering the run opens the Level Map.
-7. The current Level Map shows the Q-Dara world map with four unlocked elemental starting nodes.
-8. Entering a room generates a connected hex room and starts turn 1.
-9. Closing the room Rift shows a completion screen, then returns to the Level Map with that node marked complete and its connected child nodes unlocked.
+4. `Load Game` opens a local file picker for a previously downloaded JSON save file.
+5. Character setup requires selecting one character and crafting one starting die.
+6. The starting die has 6 face slots, starts blank, and the player assigns 3 common elemental sigils before the run.
+7. Entering the run opens the Level Map.
+8. The current Level Map shows the Q-Dara world map with four unlocked elemental starting nodes.
+9. Entering a room generates a connected hex room and starts turn 1.
+10. Closing the room Rift shows a completion screen, then returns to the Level Map with that node marked complete and its connected child nodes unlocked.
+
+## Save/Load
+
+- The room screen has a `Save Game` button above the right-side enemy display.
+- Saving downloads a JSON file named like `arcane-glitch-save-<timestamp>.json`.
+- Loading is available from the main menu through the `Load Game` button and a hidden file input.
+- Browser security means the game cannot silently write a file directly into the repo folder when opened as a normal page; save/load uses explicit JSON download and upload.
+- Save files store the character, world map progress, stats, XP, artifacts, dice/loadout, sigil inventory, program library/equipped programs, cooldowns, current generated room, player position, explored tiles, pickups, walls, enemies, temporary phase/vision state, and other current-room state needed to resume.
+- Save files also store the player's `Cycles` currency total and any uncollected Cycle drops in the current room.
 
 ## Current Characters and Programs
 
@@ -132,8 +147,9 @@ The current starting die is a custom object with 6 face slots:
 - Each element can be used up to 2 times on the starting die.
 - Unassigned faces are blank and produce no sigil when rolled.
 - The setup screen supports dragging a common sigil onto a face slot, plus click-to-select/click-to-place as a fallback.
+- Level-up blank dice roll their side count when the reward is offered: 6 sides 45%, 5 sides 30%, 4 sides 20%, or 3 sides 5%.
 
-Legacy elemental dice still use `dieFaces = [1, 1, 1, 2, 2, 3]` in `main.js` and can still be added by current level-up rewards.
+Legacy elemental dice still use `dieFaces = [1, 1, 1, 2, 2, 3]` in `main.js`. Custom dice store a per-die `sides` count and only roll or render that many face slots.
 
 Important mapping:
 - Die positions 1-3 are always common.
@@ -165,13 +181,18 @@ The Void transparent image mapping is intentionally remapped in `dice.void.files
 - Tier 2+ rooms include one Cache tile and one separate floating Artifact pickup.
 - Cache tile upgrades only offer Program rewards. Program choices appear when at least one of the Program's required elements is present in the character's dice pool. Program rewards are always added to the Program Library, even if CACHE is full.
 - Program cache rewards show two program choices and include the program effect text.
+- Increasing CACHE capacity does not automatically equip extra Programs. Empty Cache slots remain empty until the player explicitly selects Programs in `Change Programs` and confirms the loadout.
 - Floating Artifact pickups use `artifact_1.png` and open a choice between two random Artifacts when collected.
 - Floating Sigil pickups appear in rooms and use the current pixel-art element sigil asset. Moving onto one collects it and opens a New Sigil Acquired popup where the player can equip it to a blank die face.
 - If there are no blank custom die faces, collected Sigils are held in `character.sigilInventory` for future handling.
 - Tier 2+ rooms roll roughly one 50% Haven tile chance per 15 hexes. Standing on an active Haven prevents enemy attacks for the next Glitchspawn turn, then the tile becomes inactive for the rest of the level.
 - Tier 2+ rooms have a 50% chance to include one Power Hub. The first time the player enters it, it restores 2 Integrity and then changes to the off-state tile for the rest of the level.
 - If the character has available CACHE capacity, a selected Program is equipped immediately.
-- Artifacts are permanent stat upgrades and display as collected badges above the current character stats. Hover/focus on a badge shows the artifact name and mechanical grant.
+- Artifacts now have rarity (`common`, `uncommon`, `rare`) and can be permanent or temporary. Permanent artifacts apply stat upgrades immediately. Temporary artifacts may apply immediately, last for a limited number of turns, or remain as one-use buttons in the artifact strip.
+- Usable artifacts display as artifact-strip buttons above the current character stats. Hover/focus shows the artifact name and mechanical grant.
+- Cycles are the run currency. The main Cycles payout happens when the Rift closes; enemy drops are smaller supplemental pickups. Cycle drops use `cycles_currency.png`, appear on the defeated enemy's hex, and are collected by moving onto that hex.
+- Each room computes a Cycles Reward from a Max Turns budget: `ceil(hex count / 2) + starting enemy count * 5 + Rift Thread count * 5`. The room HUD shows current Cycles with the pending reward as gold `+reward`, plus a `current turns / Max Turns` counter. The reward pays out on level completion: 90%+ of Max Turns = 50, 80%-90% = 100, 50%-80% = 200, 40%-50% = 300, and 40% or less = 400.
+- World-map Market nodes open a one-time shop instead of a combat room. Entering a Market first shows a confirmation that the shop can only be visited once. Continuing marks the Market visited, unlocks downstream map nodes, and opens a shop with two Artifact offers of different rarities plus one Sigil-Glyph offer. Purchases spend Cycles; common Artifact pricing starts around 600 Cycles and scales upward by rarity.
 - Rift Threads are placed on non-Rift tiles. They render as purple floating strings/loops of energy only when their tile is visible, with a dark backing/outline so they remain readable over tile art.
 - Moving onto a Rift Thread collects it and updates the top HUD thread tracker.
 - Moving onto the Rift closes the level after all room Rift Threads are collected. Enemies do not have to be defeated to close the Rift.
@@ -200,9 +221,10 @@ Rooms are exploration + Thread Hunt rooms. The player must collect all Rift Thre
 - Cache tiles do not appear in Tier 1. Cache tiles and artifact pickups appear in Tier 2+ rooms.
 - Room shapes vary by realm:
   - Cindera favors wide, dense clusters with fewer hallway-like one-off tiles.
-  - Parcel 7 favors multi-hex islands separated by one-hex gaps that require BLINK-style traversal.
+  - Parcel 7 favors multi-hex islands separated by one-hex gaps that require BLINK-style traversal. Tier 1 always has two land sections; later tiers have at least two and currently cap at four total sections.
   - The Conclave favors ordered 2-hex and 3-hex-wide horizontal or vertical hallways.
-  - Sestra Jungle favors meandering paths with unfilled hex gaps acting as blockers.
+  - Sestra Jungle favors meandering paths with unfilled hex gaps acting as blockers. Early Jungle rooms are shorter than default tier rooms, and the meander generator is bounded so layouts stay inside the pannable room area.
+- Wall generation checks room connectivity before committing each wall group so walls should not seal the only route through 1-wide corridors.
 
 ## Camera
 
@@ -278,15 +300,26 @@ When a level-up occurs from defeating an enemy, the reward appears immediately i
 
 - **Add a die to the pool** — player selects one new die from any element.
 - Level rewards currently only grant dice, not stats or programs.
-- Current implementation grants a blank custom die with six empty faces instead of choosing an elemental die.
+- Current implementation grants a blank custom die with a weighted side count instead of choosing an elemental die.
 
 ### Artifacts
 
-Current artifact pool:
-- `Memory Shard`: EXECUTIONS +1
-- `Cache Core`: CACHE +1
-- `Phase Spur`: Actions +1
-- `Integrity Lattice`: max Integrity +1 and restores 1 Integrity
+Current permanent artifact pool:
+- `Power Glyph` (Uncommon): EXECUTIONS +1
+- `Cache Core` (Uncommon): CACHE +1
+- `Integrity Lattice` (Common): Max Integrity +1 and restores 1 Integrity
+- `Biomechanics` (Rare): Actions +1
+
+Current temporary artifact pool:
+- `Adrenaline Spike` (Common): Actions +1 for the next 3 player turns.
+- `Jungle Herbs` (Uncommon): Heal 2 Integrity immediately.
+- `Reality Warp` (Rare): 1 use. Deals 1 damage to all surrounding enemies.
+- `Pixel Bomb` (Common): 1 use. Deals 2 damage to an adjacent enemy.
+- `Sigil-Glyph` (Uncommon): 1 use. Rolls with a specific element/rarity sigil and can satisfy a program requirement during Sigil-Casting from the player artifact bar.
+
+Artifact choice rewards roll rarity first, then choose an artifact from that rarity pool. `Sigil-Glyph` instances roll and store a specific sigil when acquired.
+Artifact choice cards and the player artifact bar use images from `artifacts/`; `Sigil-Glyph` uses its stored sigil image unless a dedicated artifact image is added later. During Sigil-Casting, assignable Sigil-Glyphs highlight in the artifact bar after a program is selected, then clicking the highlighted artifact spends it.
+One-use artifacts are removed from the player artifact bar when their final use is consumed.
 
 ## Sigil-Casting and Programs
 
@@ -317,7 +350,11 @@ Implemented program effects:
 - `RIFT`: consumes two common Void symbols, then reveals all uncollected Rift Thread hexes for the current turn.
 - `BOLT`: consumes two common Surge symbols, then deals 3 arcane damage to an adjacent enemy.
 - `PUSH`: consumes two common Life symbols, then pushes an adjacent enemy one hex away and stuns it for its next turn.
-- `VISION`: consumes two common Mind symbols, then increases line of sight by 1 until the end of the next player turn.
+- `SHADOW`: consumes two common Mind symbols, then lets the player move through enemy-occupied hexes until the end of the next player turn. The player still cannot stop on an enemy.
+- `ENTANGLE`: consumes one uncommon Life symbol, then sets all adjacent enemies to 0% accuracy for their next enemy turn.
+- `PHASE`: consumes one uncommon Mind symbol, then lets the player move and attack through walls until the end of the next player turn. Enemies still respect walls.
+- `DEATHTOUCH`: consumes one uncommon Void symbol, targets an enemy exactly 2 spaces away in a straight line, destroys it, and moves the player onto that hex.
+- `PLASMA`: consumes one uncommon Surge symbol, then deals 4 arcane damage to an adjacent enemy.
 - `Physical Damage`: consumes one or more symbols based on the best matching group, targets an adjacent enemy, and deals physical damage minus Physical Defense.
 - `FOCUS`: consumes one common Mind symbol, adds 1 temporary Execution to the current Sigil-Cast, and adds 1 temporary Execution to the next player turn.
 

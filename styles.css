@@ -310,13 +310,18 @@ h1 {
   transform: translateY(0);
 }
 
-.test-mode-action {
+.test-mode-action,
+.load-game-action {
   min-width: min(180px, 100%);
   min-height: 38px;
   margin-top: 12px;
   padding: 8px 18px;
   font-size: 0.72rem;
   letter-spacing: 0.12em;
+}
+
+.save-file-input {
+  display: none;
 }
 
 .rune-strip {
@@ -1660,15 +1665,47 @@ h1 {
 }
 
 .program-library-list {
+  display: grid;
+  gap: 10px;
   max-height: min(430px, 44vh);
   overflow-y: auto;
   padding-right: 6px;
   scrollbar-color: rgba(141, 255, 180, 0.72) rgba(255, 255, 255, 0.08);
 }
 
+.program-library-list .program-reward-choice {
+  grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
+  align-items: start;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  padding: 12px 14px;
+  row-gap: 6px;
+}
+
+.program-library-list .program-reward-heading {
+  grid-row: 1 / span 2;
+  align-self: start;
+  min-width: 0;
+}
+
+.program-library-list .program-reward-choice small,
+.program-library-list .program-reward-choice em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .artifact-choice {
   display: grid;
   gap: 4px;
+}
+
+.artifact-choice-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .artifact-choice small,
@@ -1695,6 +1732,105 @@ h1 {
   line-height: 1.35;
   text-align: left;
   text-transform: none;
+}
+
+.market-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.market-panel {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.market-cycles {
+  display: inline-grid;
+  grid-template-columns: 30px auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  justify-self: center;
+  border: 1px solid rgba(255, 221, 122, 0.46);
+  background: rgba(255, 221, 122, 0.08);
+  min-width: 132px;
+  padding: 8px 10px;
+}
+
+.market-cycles img {
+  grid-row: 1 / 3;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.market-cycles span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.market-cycles strong {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.market-offers {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.market-offer {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) minmax(116px, auto);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(246, 248, 255, 0.18);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+  text-align: left;
+}
+
+.market-offer.purchased {
+  opacity: 0.58;
+}
+
+.market-offer-img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.market-offer strong,
+.market-offer small,
+.market-offer p {
+  display: block;
+}
+
+.market-offer small {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.market-offer p {
+  color: rgba(246, 248, 255, 0.72);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.market-buy-action {
+  min-width: 116px;
 }
 
 .program-reward-choice {
@@ -2032,6 +2168,27 @@ h1 {
   gap: 10px;
 }
 
+.save-game-panel {
+  position: fixed;
+  right: clamp(14px, 2vw, 28px);
+  bottom: clamp(14px, 2vw, 28px);
+  z-index: 5;
+  width: min(190px, 22vw);
+}
+
+.save-game-action {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-color: rgba(141, 255, 180, 0.56);
+  background:
+    linear-gradient(90deg, rgba(141, 255, 180, 0.09), rgba(88, 245, 255, 0.08)),
+    rgba(2, 3, 6, 0.86);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+}
+
 .enemy-info.hidden {
   display: none;
 }
@@ -2289,6 +2446,81 @@ h1 {
   font-weight: 900;
 }
 
+.cycle-tracker {
+  display: grid;
+  grid-template-columns: 30px auto;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  column-gap: 8px;
+  border: 1px solid rgba(255, 221, 122, 0.46);
+  background: rgba(255, 221, 122, 0.08);
+  min-width: 112px;
+  padding: 8px;
+  box-shadow: 0 0 16px rgba(255, 205, 82, 0.14);
+}
+
+.cycle-tracker img {
+  grid-row: 1 / 4;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 3px rgba(0, 0, 0, 0.9))
+    drop-shadow(0 0 8px rgba(255, 221, 122, 0.56));
+}
+
+.cycle-tracker span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cycle-tracker strong {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.cycle-tracker strong em {
+  color: #ffdd7a;
+  font-style: normal;
+  margin-left: 5px;
+  text-shadow: 0 0 10px rgba(255, 221, 122, 0.38);
+}
+
+.cycle-tracker small {
+  color: rgba(246, 248, 255, 0.58);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cycle-tracker.reward {
+  border-color: rgba(141, 255, 180, 0.5);
+  background: rgba(141, 255, 180, 0.075);
+  box-shadow: 0 0 16px rgba(141, 255, 180, 0.12);
+}
+
+.cycle-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.room-hud .cycle-panel {
+  width: min(210px, 30vw);
+  margin-top: 8px;
+  pointer-events: auto;
+}
+
+.room-hud .cycle-tracker {
+  width: 100%;
+  min-width: 0;
+}
+
 .progression-tracker {
   display: grid;
   grid-template-columns: repeat(2, minmax(78px, 1fr));
@@ -2358,7 +2590,11 @@ h1 {
 
 .artifact-badge {
   position: relative;
-  max-width: 72px;
+  display: inline-grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  max-width: 92px;
   overflow: hidden;
   border: 1px solid rgba(141, 255, 180, 0.34);
   background: rgba(141, 255, 180, 0.08);
@@ -2370,6 +2606,37 @@ h1 {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.artifact-badge img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.artifact-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artifact-badge.usable {
+  cursor: pointer;
+  border-color: rgba(88, 245, 255, 0.46);
+  background:
+    linear-gradient(90deg, rgba(88, 245, 255, 0.12), rgba(141, 255, 180, 0.08)),
+    rgba(2, 3, 6, 0.78);
+}
+
+.artifact-badge.assignable {
+  border-color: rgba(141, 255, 180, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(141, 255, 180, 0.2) inset,
+    0 0 14px rgba(141, 255, 180, 0.34);
+}
+
+.artifact-badge:disabled {
+  cursor: default;
 }
 
 .artifact-empty {
@@ -2757,6 +3024,87 @@ h1 {
     drop-shadow(0 0 4px rgba(0, 0, 0, 1))
     drop-shadow(0 0 10px rgba(255, 255, 255, 0.92))
     drop-shadow(0 0 24px rgba(255, 79, 216, 0.42));
+}
+
+.cycle-drop-token {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 48%;
+  height: 48%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: artifact-float 1600ms ease-in-out infinite;
+}
+
+.cycle-drop-token img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 4px rgba(0, 0, 0, 0.96))
+    drop-shadow(0 0 12px rgba(255, 221, 122, 0.68));
+}
+
+.cycle-drop-token strong {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  min-width: 18px;
+  border: 1px solid rgba(255, 221, 122, 0.72);
+  background: rgba(0, 0, 0, 0.86);
+  color: var(--text);
+  font-size: 0.46rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 3px 4px;
+  text-align: center;
+}
+
+.level-cycle-summary {
+  display: grid;
+  grid-template-columns: 36px auto;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  justify-content: center;
+  column-gap: 10px;
+  width: min(260px, 100%);
+  margin: 0 auto;
+  border: 1px solid rgba(255, 221, 122, 0.44);
+  background: rgba(255, 221, 122, 0.08);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.level-cycle-summary img {
+  grid-row: 1 / 4;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 3px rgba(0, 0, 0, 0.9))
+    drop-shadow(0 0 8px rgba(255, 221, 122, 0.56));
+}
+
+.level-cycle-summary span,
+.level-cycle-summary small {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.level-cycle-summary strong {
+  color: var(--text);
+  font-size: 1.12rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .hex-wall {
@@ -3466,6 +3814,15 @@ h1 {
     margin-bottom: 18px;
   }
 
+  .save-game-panel {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
   .enemy-card:hover,
   .enemy-card:focus-visible {
     transform: none;
@@ -3498,6 +3855,10 @@ h1 {
   .room-actions,
   .room-footer {
     display: grid;
+  }
+
+  .room-hud .cycle-panel {
+    width: 100%;
   }
 
   .room-footer {
