@@ -230,13 +230,13 @@ Rooms are exploration + Thread Hunt rooms. The player must collect all Rift Thre
 | 6         | 96        | 4            | 1      | 6       |
 | 7+        | up to 120 | up to 6      | 1      | up to 9 |
 
-- Enemies are placed on or near the Rift tile at room start.
+- Enemies are placed on or near the Rift tile at room start when the Rift shares the player's landmass. If the Rift is on a separated island, enemies spawn from the player's starting island instead.
 - Additional threads are distributed across non-Rift, non-start border tiles.
 - Room tier is determined by the node's position on the Level Map, not the player's level.
 - Cache tiles do not appear in Tier 1. Cache tiles and artifact pickups appear in Tier 2+ rooms.
 - Room shapes vary by realm:
   - Cindera favors wide, dense clusters with fewer hallway-like one-off tiles. Tier 3+ Cindera rooms can occasionally remove interior hexes to create empty pockets in the landscape.
-  - Parcel 7 favors multi-hex islands separated by one-hex gaps that require BLINK-style traversal. Tier 1 always has two land sections; later tiers have at least two and currently cap at four total sections.
+  - Parcel 7 favors multi-hex islands separated by one-hex gaps that require BLINK-style traversal. Tier 1 always has two land sections. Tier 2 has one separate island and places the Rift on that island when generation succeeds. Later tiers have at least two and currently cap at four total sections.
   - The Conclave favors ordered 2-hex and 3-hex-wide horizontal or vertical hallways.
   - Sestra Jungle favors meandering paths with unfilled hex gaps acting as blockers. Early Jungle rooms are shorter than default tier rooms, and the meander generator is bounded so layouts stay inside the pannable room area.
 - Tier 4+ rooms in all realms use island-style generation with one-hex gaps, matching the Parcel 7 traversal pattern.
@@ -264,6 +264,7 @@ The camera bounds are intended to allow any hex tile to be centered in the viewp
 - The player token animates through each hex in the selected movement path before the camera recenters.
 - The player token does a short shake when the player takes Integrity damage.
 - If player Integrity reaches 0, the run ends with a defeat popup and returns to the main menu when acknowledged.
+- The defeat popup shows run summary stats: enemies killed, Rifts closed, and total turns taken. Closed-room turn totals are stored on the character, and the active room's current turn is added when the player is de-rezzed.
 
 ## Level Map
 
@@ -365,6 +366,7 @@ Current pip artifact pool:
   - all unique symbols: 1 physical damage
   - two matching symbols: 3 physical damage
   - three or more matching symbols: 5 physical damage
+- Blank results never count toward Physical Damage matching, even if a blank roll lacks a `blank` flag in state; Physical Damage only counts real rolled sigils with an element and face.
 
 Implemented program effects:
 - `SPARK`: consumes one common Surge symbol, targets a hex exactly 2 spaces away in a straight line, and deals 2 physical damage minus Physical Defense if an enemy is there.

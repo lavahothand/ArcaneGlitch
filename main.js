@@ -1499,7 +1499,7 @@ function getParcel7ExtraIslandCount(levelNode) {
   }
 
   if (tier === 2) {
-    return Math.random() < 0.5 ? 1 : 2;
+    return 1;
   }
 
   return Math.min(3, 1 + Math.floor(Math.random() * Math.min(3, Math.max(1, tier - 1))));
@@ -1546,6 +1546,41 @@ function createIslandRoomCoords(tileCount, levelNode = null) {
   }
 
   return coords.length >= tileCount ? coords.slice(0, tileCount) : createDefaultRoomCoords(tileCount);
+}
+
+function getConnectedTileGroups(tiles) {
+  const unvisited = new Set(tiles.map((tile) => tile.id));
+  const tileByCoord = new Map(tiles.map((tile) => [tileKey(tile.q, tile.r), tile]));
+  const groups = [];
+
+  while (unvisited.size) {
+    const startId = unvisited.values().next().value;
+    const startTile = tiles.find((tile) => tile.id === startId);
+    const group = [];
+    const queue = [startTile];
+
+    unvisited.delete(startId);
+
+    while (queue.length) {
+      const current = queue.shift();
+      group.push(current);
+
+      getNeighborCoords(current).forEach((neighborCoord) => {
+        const neighbor = tileByCoord.get(tileKey(neighborCoord.q, neighborCoord.r));
+
+        if (!neighbor || !unvisited.has(neighbor.id)) {
+          return;
+        }
+
+        unvisited.delete(neighbor.id);
+        queue.push(neighbor);
+      });
+    }
+
+    groups.push(group);
+  }
+
+  return groups;
 }
 
 function createMeanderingRoomCoords(tileCount) {
@@ -1781,14 +1816,27 @@ function generateRoomTiles(roomConfig = getRoomConfigForTier(1), levelNode = nul
     type: "basic",
   }));
   const occupied = new Set(tiles.map((tile) => tileKey(tile.q, tile.r)));
+  const connectedTileGroups = getConnectedTileGroups(tiles);
+  const startIslandTileIds = new Set((connectedTileGroups.find((group) => group.some((tile) => tile.id === "tile-0")) || []).map((tile) => tile.id));
+  const parcel7TierTwoRiftIsland = levelNode?.zoneId === "parcel7" && roomConfig.tier === 2
+    ? connectedTileGroups.find((group) => group.every((tile) => !startIslandTileIds.has(tile.id)))
+    : null;
 
   const riftCandidates = tiles
+    .filter((tile) => tile.id !== "tile-0")
+    .filter((tile) => !parcel7TierTwoRiftIsland || parcel7TierTwoRiftIsland.some((islandTile) => islandTile.id === tile.id))
+    .filter((tile) =>
+      getNeighborCoords(tile).some((coord) => !occupied.has(tileKey(coord.q, coord.r)))
+    )
+    .sort((a, b) => getHexDistance(b, tiles[0]) - getHexDistance(a, tiles[0]));
+  const fallbackRiftCandidates = tiles
     .filter((tile) => tile.id !== "tile-0")
     .filter((tile) =>
       getNeighborCoords(tile).some((coord) => !occupied.has(tileKey(coord.q, coord.r)))
     )
     .sort((a, b) => getHexDistance(b, tiles[0]) - getHexDistance(a, tiles[0]));
-  const riftPool = riftCandidates.slice(0, Math.max(1, Math.ceil(riftCandidates.length / 2)));
+  const riftCandidatePool = riftCandidates.length ? riftCandidates : fallbackRiftCandidates;
+  const riftPool = riftCandidatePool.slice(0, Math.max(1, Math.ceil(riftCandidatePool.length / 2)));
   const riftTile = riftPool[Math.floor(Math.random() * riftPool.length)];
 
   riftTile.type = "rift";
@@ -2268,7 +2316,7 @@ function canCastProgram(program, castSymbols, cooldownLockedProgramIds = new Set
     return true;
   }
 
-  const availableSymbols = castSymbols.filter((symbol) => !symbol.spent && !symbol.blank).map((symbol) => ({ ...symbol }));
+      const availableSymbols = castSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent).map((symbol) => ({ ...symbol }));
 
   return program.requirement.every((requirement) => {
     const symbolIndex = availableSymbols.findIndex(
@@ -2285,7 +2333,7 @@ function canCastProgram(program, castSymbols, cooldownLockedProgramIds = new Set
 }
 
 function getPhysicalDamage(castSymbols) {
-  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => !symbol.spent && !symbol.blank) : [];
+  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent) : [];
 
   if (!availableSymbols.length) {
     return 1;
@@ -2299,6 +2347,10 @@ function getPhysicalDamage(castSymbols) {
   const highestMatch = Math.max(...symbolCounts.values());
 
   return highestMatch >= 3 ? 5 : highestMatch === 2 ? 3 : 1;
+}
+
+function isUsableSigilSymbol(symbol) {
+  return Boolean(symbol && !symbol.blank && symbol.element && Number.isFinite(symbol.face));
 }
 
 function renderAllocatedSymbols(symbols) {
@@ -2339,7 +2391,7 @@ function renderSigilDieImage(symbol, label = "") {
 }
 
 function renderPhysicalDamageProgram(castSymbols, allocatedSymbols = []) {
-  const isAvailable = Array.isArray(castSymbols) && castSymbols.some((symbol) => !symbol.spent && !symbol.blank);
+  const isAvailable = Array.isArray(castSymbols) && castSymbols.some((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent);
   const damage = getPhysicalDamage(castSymbols);
 
   return `
@@ -2665,7 +2717,7 @@ function findProgramAllocation(program, castSymbols) {
     return [];
   }
 
-  const availableSymbols = castSymbols.filter((symbol) => !symbol.spent && !symbol.blank);
+  const availableSymbols = castSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent);
 
   return program.requirement.reduce((allocated, requirement) => {
     const symbol = availableSymbols.find(
@@ -2680,7 +2732,7 @@ function findProgramAllocation(program, castSymbols) {
 }
 
 function findPhysicalAllocation(castSymbols) {
-  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => !symbol.spent && !symbol.blank && !symbol.artifactInstanceId) : [];
+  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent && !symbol.artifactInstanceId) : [];
 
   if (!availableSymbols.length) {
     return [];
@@ -2696,13 +2748,14 @@ function findPhysicalAllocation(castSymbols) {
 }
 
 function findPhysicalAllocationFromSymbol(castSymbols, selectedSymbol) {
-  if (!selectedSymbol || selectedSymbol.blank) {
+  if (!isUsableSigilSymbol(selectedSymbol)) {
     return [];
   }
 
   return Array.isArray(castSymbols)
     ? castSymbols.filter(
         (symbol) =>
+          isUsableSigilSymbol(symbol) &&
           !symbol.spent &&
           !symbol.artifactInstanceId &&
           symbol.element === selectedSymbol.element &&
@@ -2864,6 +2917,16 @@ function addCharacterXp(character, amount) {
   }
 
   return didLevelUp;
+}
+
+function ensureRunStats(character) {
+  character.runStats = {
+    enemiesKilled: Number.isFinite(character.runStats?.enemiesKilled) ? character.runStats.enemiesKilled : 0,
+    riftsClosed: Number.isFinite(character.runStats?.riftsClosed) ? character.runStats.riftsClosed : 0,
+    turnsTaken: Number.isFinite(character.runStats?.turnsTaken) ? character.runStats.turnsTaken : 0,
+  };
+
+  return character.runStats;
 }
 
 function getXpThresholdForLevel(level) {
@@ -3450,6 +3513,7 @@ function renderRoomTiles(
 
 function showInitialRoom(character, nodeId = startingMapState.selectedNode, savedRoomState = null) {
   character.progression = character.progression || { ...startingProgression };
+  ensureRunStats(character);
   character.stats.maxIntegrity = character.stats.maxIntegrity || character.stats.integrity;
   character.cycles = Number.isFinite(character.cycles) ? character.cycles : 0;
   ensureProgramLibrary(character);
@@ -3472,11 +3536,21 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   const collectedSigilTileIds = [...(savedRoomState?.collectedSigilTileIds || [])];
   const usedPowerHubTileIds = [...(savedRoomState?.usedPowerHubTileIds || [])];
   const cycleDrops = [...(savedRoomState?.cycleDrops || [])];
-  const enemySpawnCandidates = roomTiles
+  const spawnTileGroups = getConnectedTileGroups(roomTiles);
+  const playerStartGroup = spawnTileGroups.find((group) => group.some((tile) => tile.id === "tile-0")) || roomTiles;
+  const isRiftOnPlayerIsland = playerStartGroup.some((tile) => tile.id === riftTile.id);
+  const enemySpawnCandidates = (isRiftOnPlayerIsland ? roomTiles : playerStartGroup)
     .filter((tile) => tile.id !== "tile-0" && tile.id !== riftTile.id)
-    .sort((a, b) => getHexDistance(a, riftTile) - getHexDistance(b, riftTile));
+    .sort((a, b) =>
+      isRiftOnPlayerIsland
+        ? getHexDistance(a, riftTile) - getHexDistance(b, riftTile)
+        : getHexDistance(b, roomTiles[0]) - getHexDistance(a, roomTiles[0])
+    );
+  const enemySpawnTiles = isRiftOnPlayerIsland
+    ? [riftTile, ...enemySpawnCandidates]
+    : enemySpawnCandidates;
   const activeEnemies = savedRoomState?.activeEnemies || roomConfig.enemyTypes.map((enemyType, index) => {
-    const spawnTile = index === 0 ? riftTile : enemySpawnCandidates[index - 1] || riftTile;
+    const spawnTile = enemySpawnTiles[index] || enemySpawnCandidates[0] || riftTile;
     const enemy = createEnemyInstance(enemyType, index, spawnTile.id, levelNode.tier);
 
     if (levelNode.tier === 1) {
@@ -3490,6 +3564,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     ? savedRoomState.levelCycleMaxTurns
     : getLevelCycleMaxTurns(roomTiles.length, activeEnemies.length, riftThreadTileIds.length);
   let levelCycleRewardAwarded = Boolean(savedRoomState?.levelCycleRewardAwarded);
+  let levelCompletionStatsRecorded = Boolean(savedRoomState?.levelCompletionStatsRecorded);
   let spawnedEnemyCount = savedRoomState?.spawnedEnemyCount || 0;
   let characterPositionId = savedRoomState?.characterPositionId || roomTiles[0].id;
   const exploredTileIds = new Set(savedRoomState?.exploredTileIds || getVisibleTileIds(roomTiles, characterPositionId));
@@ -3735,6 +3810,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         cycleDrops: cloneSaveData(cycleDrops),
         levelCycleMaxTurns,
         levelCycleRewardAwarded,
+        levelCompletionStatsRecorded,
         spawnedEnemyCount,
         turnNumber,
         actionPointsRemaining,
@@ -3883,6 +3959,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
     if (enemyIntegrityBefore > 0 && enemy.stats.integrity <= 0) {
       didLevelUp = addCharacterXp(character, enemy.xpValue);
+      recordEnemyKill(enemy);
       maybeDropCycles(enemy.positionId, enemy);
       enemy.positionId = null;
       enemy.stunnedTurns = 0;
@@ -3937,6 +4014,25 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         showCyclePipIndicator(rolledSlotIndices[resultIndex], amount);
       }
     });
+  }
+
+  function recordEnemyKill(enemy) {
+    if (!enemy || enemy.killCounted) {
+      return;
+    }
+
+    enemy.killCounted = true;
+    ensureRunStats(character).enemiesKilled += 1;
+  }
+
+  function getRunDeathStats() {
+    const stats = ensureRunStats(character);
+
+    return {
+      enemiesKilled: stats.enemiesKilled,
+      riftsClosed: stats.riftsClosed,
+      turnsTaken: stats.turnsTaken + (levelCompletionStatsRecorded ? 0 : turnNumber),
+    };
   }
 
   function animateRiftGhoulBolt(enemy) {
@@ -4266,6 +4362,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     roomStage.classList.remove("movement-active", "dragging");
     deactivateRunecasting();
     updateRoom();
+    const runDeathStats = getRunDeathStats();
 
     const overlay = document.createElement("div");
     overlay.className = "run-death-overlay";
@@ -4274,6 +4371,11 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         <p class="signal">Signal Lost</p>
         <h2 id="run-death-title">Sigilant Derezzed</h2>
         <p>${sourceText}</p>
+        <dl class="run-death-stats" aria-label="Run summary">
+          <div><dt>Enemies Killed</dt><dd>${runDeathStats.enemiesKilled}</dd></div>
+          <div><dt>Rifts Closed</dt><dd>${runDeathStats.riftsClosed}</dd></div>
+          <div><dt>Total Turns</dt><dd>${runDeathStats.turnsTaken}</dd></div>
+        </dl>
         <button class="primary-action" type="button" id="return-main-menu">Return to Main Menu</button>
       </section>
     `;
@@ -4505,6 +4607,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
     if (enemyIntegrityBeforeDamage > 0 && enemy.stats.integrity <= 0) {
       didLevelUp = addCharacterXp(character, enemy.xpValue);
+      recordEnemyKill(enemy);
       cycleDrop = maybeDropCycles(defeatedTileId, enemy);
       enemy.positionId = null;
       enemy.confusedTurns = 0;
@@ -5058,7 +5161,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   function hasUsableCastSymbols() {
-    return Array.isArray(currentCastSymbols) && getCastSymbolsWithGlyphs().some((symbol) => !symbol.spent && !symbol.blank);
+    return Array.isArray(currentCastSymbols) && getCastSymbolsWithGlyphs().some((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent);
   }
 
   function finishRunecastingIfNoOptions(statusText = "") {
@@ -5160,6 +5263,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     }
 
     let completionStatus = status || "Rift closed. Level complete.";
+
+    if (!levelCompletionStatsRecorded) {
+      const runStats = ensureRunStats(character);
+
+      runStats.riftsClosed += 1;
+      runStats.turnsTaken += turnNumber;
+      levelCompletionStatsRecorded = true;
+    }
 
     if (!levelCycleRewardAwarded) {
       const cycleReward = getLevelCycleReward(turnNumber, levelCycleMaxTurns);
@@ -6834,7 +6945,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     }
 
     if (programId === "physical-damage") {
-      const availableSymbols = currentCastSymbols.filter((symbol) => !symbol.spent && !symbol.blank && !symbol.artifactInstanceId);
+      const availableSymbols = currentCastSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent && !symbol.artifactInstanceId);
 
       if (!availableSymbols.length) {
         return;
@@ -7288,6 +7399,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         const didLevelUp = addCharacterXp(character, enemyXp);
 
         targetEnemy.stats.integrity = 0;
+        recordEnemyKill(targetEnemy);
         maybeDropCycles(defeatedTileId, targetEnemy);
         targetEnemy.positionId = null;
         targetEnemy.confusedTurns = 0;
@@ -7380,6 +7492,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       if (enemyIntegrityBeforeDamage > 0 && targetEnemy.stats.integrity <= 0) {
         const defeatedTileId = targetEnemy.positionId;
         didLevelUp = addCharacterXp(character, targetEnemy.xpValue);
+        recordEnemyKill(targetEnemy);
         maybeDropCycles(defeatedTileId, targetEnemy);
         targetEnemy.positionId = null;
         targetEnemy.stunnedTurns = 0;
