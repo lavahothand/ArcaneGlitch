@@ -311,13 +311,20 @@ h1 {
 }
 
 .test-mode-action,
-.load-game-action {
+.load-game-action,
+.menu-link-action {
   min-width: min(180px, 100%);
   min-height: 38px;
   margin-top: 12px;
   padding: 8px 18px;
   font-size: 0.72rem;
   letter-spacing: 0.12em;
+}
+
+.menu-link-action {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
 }
 
 .save-file-input {
@@ -717,6 +724,11 @@ h1 {
     0 0 16px color-mix(in srgb, var(--die-accent) 18%, transparent);
 }
 
+.craft-face.preset {
+  border-color: color-mix(in srgb, var(--die-accent) 82%, rgba(141, 255, 180, 0.28));
+  cursor: default;
+}
+
 .craft-face img {
   width: 64%;
   height: 64%;
@@ -731,6 +743,58 @@ h1 {
   left: 7px;
   color: rgba(246, 248, 255, 0.48);
   font-size: 0.66rem;
+}
+
+.pip-marker {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border: 1px solid rgba(246, 248, 255, 0.72);
+  border-radius: 50%;
+  background: #f8c84a;
+  box-shadow: 0 0 5px rgba(248, 200, 74, 0.36);
+}
+
+.pip-marker::after {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.72);
+  content: "";
+}
+
+.fortune-pip {
+  background: #64d98d;
+  box-shadow: 0 0 5px rgba(100, 217, 141, 0.32);
+}
+
+.arcane-pip {
+  background: #b06cff;
+  box-shadow: 0 0 5px rgba(176, 108, 255, 0.36);
+}
+
+.crafting-pip-token .pip-marker {
+  box-shadow: none;
+}
+
+.crafting-face-pip-slot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px dashed rgba(246, 248, 255, 0.42);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.crafting-face-pip-slot.filled,
+.crafting-face-pip-slot.selected {
+  border-style: solid;
+  border-color: rgba(141, 255, 180, 0.86);
 }
 
 .sigil-craft-bank {
@@ -851,6 +915,14 @@ h1 {
   text-transform: uppercase;
 }
 
+.crafting-pip-token {
+  display: grid;
+  gap: 6px;
+  min-width: 90px;
+  place-items: center;
+  text-transform: uppercase;
+}
+
 .crafting-sigil-token img {
   width: 42px;
   height: 42px;
@@ -860,7 +932,9 @@ h1 {
 }
 
 .crafting-sigil-token span,
+.crafting-pip-token span,
 .crafting-sigil-token small,
+.crafting-pip-token small,
 .crafting-empty-bank,
 .crafting-empty-label {
   color: var(--muted);
@@ -872,6 +946,14 @@ h1 {
 
 .crafting-sigil-token span {
   color: var(--text);
+}
+
+.crafting-pip-token span {
+  color: var(--text);
+}
+
+.pip-heading {
+  margin-top: 8px;
 }
 
 .crafting-empty-bank {
@@ -2389,21 +2471,33 @@ h1 {
   margin-left: auto;
 }
 
-.change-programs-action {
-  flex: 0 1 222px;
+.room-status-panel {
+  flex: 1 1 222px;
   min-width: 190px;
-  min-height: 58px;
-  margin-left: auto;
-  padding: 10px 14px;
-  border-color: rgba(141, 255, 180, 0.56);
+  margin: 0 0 0 auto;
+  border: 1px solid rgba(141, 255, 180, 0.32);
   background:
-    linear-gradient(90deg, rgba(141, 255, 180, 0.08), rgba(88, 245, 255, 0.08)),
-    rgba(2, 3, 6, 0.86);
-  color: var(--text);
-  font-size: 0.76rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+    linear-gradient(90deg, rgba(141, 255, 180, 0.06), rgba(88, 245, 255, 0.04)),
+    rgba(2, 3, 6, 0.68);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  min-height: 58px;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
   text-transform: uppercase;
+  white-space: normal;
+}
+
+.room-crafting-panel {
+  width: min(960px, calc(100vw - 36px));
+}
+
+.room-crafting-panel #room-crafting-workbench {
+  max-height: min(68vh, 720px);
+  overflow-y: auto;
 }
 
 .thread-tracker {
@@ -3272,13 +3366,14 @@ h1 {
 
 .room-tile.occupied {
   cursor: default;
+  z-index: 20;
 }
 
 .character-token {
   position: absolute;
   left: 50%;
   top: 50%;
-  z-index: 2;
+  z-index: 30;
   width: 66%;
   height: 66%;
   object-fit: contain;
@@ -3289,6 +3384,33 @@ h1 {
     drop-shadow(0 0 8px rgba(255, 255, 255, 0.76))
     drop-shadow(0 0 18px rgba(255, 255, 255, 0.48))
     drop-shadow(0 0 30px rgba(255, 255, 255, 0.26));
+}
+
+.character-token.damage-shake {
+  animation: character-damage-shake 320ms steps(2, jump-none);
+}
+
+@keyframes character-damage-shake {
+  0%,
+  100% {
+    transform: translate(-50%, -54%);
+  }
+
+  20% {
+    transform: translate(calc(-50% - 5px), calc(-54% + 1px));
+  }
+
+  40% {
+    transform: translate(calc(-50% + 5px), calc(-54% - 1px));
+  }
+
+  60% {
+    transform: translate(calc(-50% - 3px), -54%);
+  }
+
+  80% {
+    transform: translate(calc(-50% + 3px), -54%);
+  }
 }
 
 .glitchspawn-token {
@@ -3311,9 +3433,9 @@ h1 {
   position: absolute;
   left: 50%;
   top: 22%;
-  z-index: 5;
-  color: #ff4f6d;
-  font-size: 1.5rem;
+  z-index: 45;
+  color: #ff1748;
+  font-size: 1.7rem;
   font-weight: 950;
   letter-spacing: 0.04em;
   pointer-events: none;
@@ -3325,16 +3447,27 @@ h1 {
 }
 
 .damage-indicator.enemy-damage {
-  color: #ff4f6d;
+  color: #ff1748;
   text-shadow:
-    0 0 9px rgba(255, 41, 73, 0.9),
+    0 0 4px rgba(255, 255, 255, 0.88),
+    0 0 12px rgba(255, 23, 72, 0.98),
     0 2px 8px rgba(0, 0, 0, 0.9);
 }
 
 .damage-indicator.player-damage {
-  color: #ff4f6d;
+  color: #ff1748;
   text-shadow:
-    0 0 9px rgba(255, 41, 73, 0.9),
+    0 0 4px rgba(255, 255, 255, 0.88),
+    0 0 12px rgba(255, 23, 72, 0.98),
+    0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.cycle-pip-indicator {
+  top: 8%;
+  z-index: 7;
+  color: #ffd84a;
+  text-shadow:
+    0 0 9px rgba(255, 216, 74, 0.92),
     0 2px 8px rgba(0, 0, 0, 0.9);
 }
 
@@ -3381,12 +3514,12 @@ h1 {
 }
 
 .room-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  display: flex;
   justify-self: center;
   align-items: center;
+  justify-content: flex-end;
   width: min(100%, calc(100vw - 520px));
-  max-width: 860px;
+  max-width: 940px;
   gap: 18px;
 }
 
@@ -3421,29 +3554,32 @@ h1 {
   opacity: 0.48;
 }
 
-.room-footer p {
-  min-width: 0;
-  max-width: none;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1.35;
-  text-transform: uppercase;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
 .room-actions {
   display: flex;
-  gap: 10px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 8px;
+}
+
+.room-actions-label {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  margin-right: 4px;
+  text-align: left;
+  text-transform: uppercase;
 }
 
 .move-action,
 .roll-action,
+.room-utility-action,
 .turn-action {
-  min-width: 150px;
+  flex: 0 1 142px;
+  min-width: 118px;
 }
 
 .runecast-panel {
@@ -3495,6 +3631,7 @@ h1 {
 }
 
 .roll-die-option {
+  position: relative;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
   grid-template-rows: auto 1fr;
@@ -3506,6 +3643,12 @@ h1 {
   column-gap: 8px;
   padding: 7px;
   text-align: left;
+}
+
+.roll-die-option > .pip-marker {
+  position: absolute;
+  top: 5px;
+  right: 5px;
 }
 
 .roll-die-option:hover,
@@ -3568,6 +3711,7 @@ h1 {
 }
 
 .roll-result {
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -3575,6 +3719,12 @@ h1 {
   background: rgba(255, 255, 255, 0.035);
   padding: 6px;
   text-align: center;
+}
+
+.roll-result > .pip-marker {
+  position: absolute;
+  top: 5px;
+  right: 5px;
 }
 
 .roll-result.spent {

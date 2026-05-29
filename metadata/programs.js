@@ -17,14 +17,21 @@
 // - entangleAdjacent: adjacent enemies have 0% accuracy on their next enemy turn.
 // - phaseThroughWalls: allows player movement and player attacks through walls for playerTurns player turns.
 // - deathTouchLine: targets an enemy exactly distance spaces away in a straight line, teleports onto it, and destroys it.
+// - implodeVisible: all visible enemies take direct damage equal to their Physical Defense.
+// - temporaryExecBoost: adds amount Executions now and for turns future player turns.
+// - invertIncomingDamage: the next charges damaging enemy attacks heal instead.
+// - stunAllEnemies: all enemies on the map get stunned for duration enemy turns.
+// - damageLineFalloff: targets a straight-line hex up to distance away and applies damages along the line.
+// - manifestDieFace: choose another rolled die and set it to one of its faces for this Sigil-Cast.
+// - blinkAnywhere: teleport to any unoccupied hex on the map.
 // Cooldown is measured in player turns after the program is used.
+// Programs do not have a fixed element. They are defined by their required sigil symbols.
 window.arcaneMetadata = window.arcaneMetadata || {};
 
 window.arcaneMetadata.programs = {
   teleport: {
     id: "teleport",
     name: "BLINK",
-    element: "void",
     requirement: [{ element: "void", face: 1 }],
     summary: "Move 3 spaces in a straight line.",
     details: "Teleport exactly 3 hex spaces in a single straight-line direction.",
@@ -37,7 +44,6 @@ window.arcaneMetadata.programs = {
   spark: {
     id: "spark",
     name: "SPARK",
-    element: "surge",
     requirement: [{ element: "surge", face: 1 }],
     summary: "Deal 2 PD 2 spaces away.",
     details: "Deal 2 Physical Damage to an enemy exactly 2 spaces away.",
@@ -52,7 +58,6 @@ window.arcaneMetadata.programs = {
   rebuild: {
     id: "rebuild",
     name: "REBUILD",
-    element: "life",
     requirement: [{ element: "life", face: 1 }],
     summary: "Heal 1 Integrity.",
     details: "Heal 1 Integrity up to your max.",
@@ -65,7 +70,6 @@ window.arcaneMetadata.programs = {
   focus: {
     id: "focus",
     name: "FOCUS",
-    element: "mind",
     requirement: [{ element: "mind", face: 1 }],
     summary: "Gain 1 Execution now and next turn.",
     details: "Gain 1 temporary Execution for the current Sigil-Cast and 1 temporary Execution on your next turn.",
@@ -79,7 +83,6 @@ window.arcaneMetadata.programs = {
   quake: {
     id: "quake",
     name: "QUAKE",
-    element: "surge",
     requirement: [
       { element: "surge", face: 1 },
       { element: "life", face: 1 },
@@ -96,7 +99,6 @@ window.arcaneMetadata.programs = {
   shatter: {
     id: "shatter",
     name: "SHATTER",
-    element: "mind",
     requirement: [
       { element: "mind", face: 1 },
       { element: "surge", face: 1 },
@@ -112,7 +114,6 @@ window.arcaneMetadata.programs = {
   blinkTwo: {
     id: "blinkTwo",
     name: "BLINK II",
-    element: "surge",
     requirement: [
       { element: "surge", face: 1 },
       { element: "void", face: 1 },
@@ -128,7 +129,6 @@ window.arcaneMetadata.programs = {
   drain: {
     id: "drain",
     name: "DRAIN",
-    element: "life",
     requirement: [
       { element: "life", face: 1 },
       { element: "mind", face: 1 },
@@ -146,7 +146,6 @@ window.arcaneMetadata.programs = {
   confuse: {
     id: "confuse",
     name: "CONFUSE",
-    element: "mind",
     requirement: [
       { element: "mind", face: 1 },
       { element: "void", face: 1 },
@@ -162,7 +161,6 @@ window.arcaneMetadata.programs = {
   fortify: {
     id: "fortify",
     name: "FORTIFY",
-    element: "void",
     requirement: [
       { element: "void", face: 1 },
       { element: "life", face: 1 },
@@ -177,7 +175,6 @@ window.arcaneMetadata.programs = {
   rift: {
     id: "rift",
     name: "RIFT",
-    element: "void",
     requirement: [
       { element: "void", face: 1 },
       { element: "void", face: 1 },
@@ -192,7 +189,6 @@ window.arcaneMetadata.programs = {
   bolt: {
     id: "bolt",
     name: "BOLT",
-    element: "surge",
     requirement: [
       { element: "surge", face: 1 },
       { element: "surge", face: 1 },
@@ -209,7 +205,6 @@ window.arcaneMetadata.programs = {
   push: {
     id: "push",
     name: "PUSH",
-    element: "life",
     requirement: [
       { element: "life", face: 1 },
       { element: "life", face: 1 },
@@ -225,7 +220,6 @@ window.arcaneMetadata.programs = {
   shadow: {
     id: "shadow",
     name: "SHADOW",
-    element: "mind",
     requirement: [
       { element: "mind", face: 1 },
       { element: "mind", face: 1 },
@@ -241,7 +235,6 @@ window.arcaneMetadata.programs = {
   entangle: {
     id: "entangle",
     name: "ENTANGLE",
-    element: "life",
     requirement: [{ element: "life", face: 2 }],
     summary: "Adjacent enemies miss next turn.",
     details: "All adjacent enemies have 0% accuracy during their next enemy turn.",
@@ -254,7 +247,6 @@ window.arcaneMetadata.programs = {
   phase: {
     id: "phase",
     name: "PHASE",
-    element: "mind",
     requirement: [{ element: "mind", face: 2 }],
     summary: "Move and attack through walls.",
     details: "Move and attack through walls until the end of your next turn.",
@@ -267,7 +259,6 @@ window.arcaneMetadata.programs = {
   deathTouch: {
     id: "deathTouch",
     name: "DEATHTOUCH",
-    element: "void",
     requirement: [{ element: "void", face: 2 }],
     summary: "Teleport and destroy a lined enemy.",
     details: "Teleport onto an enemy exactly 2 spaces away in a straight line. The enemy is destroyed.",
@@ -279,8 +270,7 @@ window.arcaneMetadata.programs = {
   },
   plasma: {
     id: "plasma",
-    name: "PLASMA",
-    element: "surge",
+    name: "BOLT II",
     requirement: [{ element: "surge", face: 2 }],
     summary: "Deal 4 AD adjacent.",
     details: "Deal 4 Arcane Damage to an adjacent enemy.",
@@ -289,6 +279,115 @@ window.arcaneMetadata.programs = {
       type: "damageAdjacent",
       amount: 4,
       damageType: "arcane",
+    },
+  },
+  implode: {
+    id: "implode",
+    name: "IMPLODE",
+    requirement: [
+      { element: "surge", face: 1 },
+      { element: "surge", face: 2 },
+    ],
+    summary: "Visible enemies take PD equal to their PD.",
+    details: "All enemies in view take Physical Damage equal to their Physical Defense.",
+    cooldown: 5,
+    effect: {
+      type: "implodeVisible",
+    },
+  },
+  forsight: {
+    id: "forsight",
+    name: "FORSIGHT",
+    requirement: [
+      { element: "mind", face: 1 },
+      { element: "mind", face: 2 },
+    ],
+    summary: "+1 Execution now and for 4 turns.",
+    details: "Gain +1 Execution for this Sigil-Cast and for the next 4 turns.",
+    cooldown: 4,
+    effect: {
+      type: "temporaryExecBoost",
+      amount: 1,
+      turns: 4,
+    },
+  },
+  siphon: {
+    id: "siphon",
+    name: "SIPHON",
+    requirement: [
+      { element: "life", face: 1 },
+      { element: "life", face: 2 },
+    ],
+    summary: "Next 2 damaging attacks heal you.",
+    details: "The next two enemy attacks that would damage you heal you instead.",
+    cooldown: 3,
+    effect: {
+      type: "invertIncomingDamage",
+      charges: 2,
+    },
+  },
+  gravity: {
+    id: "gravity",
+    name: "GRAVITY",
+    requirement: [
+      { element: "void", face: 1 },
+      { element: "void", face: 2 },
+    ],
+    summary: "Stun all enemies next turn.",
+    details: "All enemies on the map are stunned during their next enemy turn.",
+    cooldown: 4,
+    effect: {
+      type: "stunAllEnemies",
+      duration: 1,
+    },
+  },
+  plasmaRare: {
+    id: "plasmaRare",
+    name: "PLASMA",
+    requirement: [{ element: "surge", face: 3 }],
+    summary: "Line blast for 8/6/4/2 AD.",
+    details: "Target a hex in a straight line up to 4 spaces away. Hexes along the line take 8, then 6, then 4, then 2 Arcane Damage.",
+    cooldown: 4,
+    effect: {
+      type: "damageLineFalloff",
+      distance: 4,
+      damageType: "arcane",
+      damages: [8, 6, 4, 2],
+    },
+  },
+  manifest: {
+    id: "manifest",
+    name: "MANIFEST",
+    requirement: [{ element: "mind", face: 3 }],
+    summary: "Set another die to any face.",
+    details: "Choose another rolled die and set it to any one of that die's faces for this Sigil-Cast.",
+    cooldown: 2,
+    effect: {
+      type: "manifestDieFace",
+    },
+  },
+  blinkThree: {
+    id: "blinkThree",
+    name: "BLINK III",
+    requirement: [{ element: "void", face: 3 }],
+    summary: "Teleport to any open hex.",
+    details: "Teleport to any unoccupied hex on the map.",
+    cooldown: 4,
+    effect: {
+      type: "blinkAnywhere",
+    },
+  },
+  newLife: {
+    id: "newLife",
+    name: "REGENERATE",
+    requirement: [{ element: "life", face: 3 }],
+    summary: "Heal 10 Integrity.",
+    details: "Heal 10 Integrity. This program cannot be used again this level.",
+    cooldown: null,
+    oncePerLevel: true,
+    effect: {
+      type: "healIntegrity",
+      amount: 10,
     },
   },
 };

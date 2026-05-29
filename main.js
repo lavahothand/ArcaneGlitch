@@ -607,7 +607,6 @@ const programs = metadata.programs || {
   teleport: {
     id: "teleport",
     name: "BLINK",
-    element: "void",
     requirement: [{ element: "void", face: 1 }],
     summary: "Move 3 spaces in a straight line.",
     details: "Teleport exactly 3 hex spaces in a single straight-line direction.",
@@ -620,10 +619,9 @@ const programs = metadata.programs || {
   spark: {
     id: "spark",
     name: "SPARK",
-    element: "surge",
     requirement: [{ element: "surge", face: 1 }],
     summary: "Deal 2 PD 2 spaces away.",
-    details: "Surge program. Spend one common Surge symbol to deal 2 physical damage to an enemy exactly 2 spaces away.",
+    details: "Spend one common Surge symbol to deal 2 physical damage to an enemy exactly 2 spaces away.",
     cooldown: 1,
     effect: {
       type: "damageRange",
@@ -635,10 +633,9 @@ const programs = metadata.programs || {
   rebuild: {
     id: "rebuild",
     name: "REBUILD",
-    element: "life",
     requirement: [{ element: "life", face: 1 }],
     summary: "Heal 1 Integrity.",
-    details: "Life program. Spend one common Life symbol to restore 1 Integrity.",
+    details: "Spend one common Life symbol to restore 1 Integrity.",
     cooldown: 0,
     effect: {
       type: "healIntegrity",
@@ -648,7 +645,6 @@ const programs = metadata.programs || {
   focus: {
     id: "focus",
     name: "FOCUS",
-    element: "mind",
     requirement: [{ element: "mind", face: 1 }],
     summary: "Gain 1 Execution now and next turn.",
     details: "Spend one common Mind symbol to gain 1 temporary Execution for the current Sigil-Cast and 1 temporary Execution on your next turn.",
@@ -662,7 +658,6 @@ const programs = metadata.programs || {
   entangle: {
     id: "entangle",
     name: "ENTANGLE",
-    element: "life",
     requirement: [{ element: "life", face: 2 }],
     summary: "Adjacent enemies miss next turn.",
     details: "All adjacent enemies have 0% accuracy during their next enemy turn.",
@@ -675,7 +670,6 @@ const programs = metadata.programs || {
   phase: {
     id: "phase",
     name: "PHASE",
-    element: "mind",
     requirement: [{ element: "mind", face: 2 }],
     summary: "Move and attack through walls.",
     details: "Move and attack through walls until the end of your next turn.",
@@ -688,7 +682,6 @@ const programs = metadata.programs || {
   deathTouch: {
     id: "deathTouch",
     name: "DEATHTOUCH",
-    element: "void",
     requirement: [{ element: "void", face: 2 }],
     summary: "Teleport and destroy a lined enemy.",
     details: "Teleport onto an enemy exactly 2 spaces away in a straight line. The enemy is destroyed.",
@@ -700,8 +693,7 @@ const programs = metadata.programs || {
   },
   plasma: {
     id: "plasma",
-    name: "PLASMA",
-    element: "surge",
+    name: "BOLT II",
     requirement: [{ element: "surge", face: 2 }],
     summary: "Deal 4 AD adjacent.",
     details: "Deal 4 Arcane Damage to an adjacent enemy.",
@@ -755,6 +747,69 @@ const artifacts = metadata.artifacts || [
     amount: 1,
     label: "Actions +1",
   },
+  {
+    id: "psychicResonator",
+    name: "Psychic Resonator",
+    type: "temporary",
+    rarity: "rare",
+    image: "artifacts/psychic_resonator.png",
+    label: "1 Use: reveal all enemies and deal 4 Arcane Damage to one",
+    uses: 1,
+    effect: { type: "revealEnemiesDamage", amount: 4, damageType: "arcane" },
+  },
+  {
+    id: "magShield",
+    name: "Mag Shield",
+    type: "temporary",
+    rarity: "uncommon",
+    image: "artifacts/mag_shield.png",
+    label: "1 Use: shield all damage for 3 turns",
+    uses: 1,
+    effect: { type: "shieldDamage", turns: 3 },
+  },
+  {
+    id: "skyWalkers",
+    name: "Sky Walkers",
+    type: "temporary",
+    rarity: "common",
+    image: "artifacts/Sky_Walkers.png",
+    label: "1 Use: each Move action goes 1 extra space for 5 turns",
+    uses: 1,
+    effect: { type: "moveActionRangeBonus", amount: 1, turns: 5 },
+  },
+  {
+    id: "arcaneKnowledge",
+    name: "Arcane Knowledge",
+    type: "permanent",
+    rarity: "rare",
+    image: "artifacts/arcane_knowledge.png",
+    label: "Gain a new 8-sided blank die",
+    effect: { type: "addBlankDie", sides: 8 },
+  },
+  {
+    id: "cyclesPip",
+    name: "Cycles Pip",
+    type: "pip",
+    rarity: "uncommon",
+    label: "Crafting pip: +10 Cycles when this die side rolls",
+    effect: { type: "pip", pipType: "cycles" },
+  },
+  {
+    id: "fortunePip",
+    name: "Fortune Pip",
+    type: "pip",
+    rarity: "uncommon",
+    label: "Crafting pip: this die side is 10% more likely to roll",
+    effect: { type: "pip", pipType: "fortune" },
+  },
+  {
+    id: "arcanePip",
+    name: "Arcane Pip",
+    type: "pip",
+    rarity: "rare",
+    label: "Crafting pip: +1 Execution for this Sigil-Cast when this die side rolls",
+    effect: { type: "pip", pipType: "arcane" },
+  },
 ];
 
 function getRandomOptions(items, count) {
@@ -802,9 +857,48 @@ function rollArtifactFromRarity(rarity, artifactPool = artifacts) {
     : null;
 }
 
+function getPipDefinition(pipType) {
+  return pipDefinitions[pipType] || null;
+}
+
+function createPipInstance(pipType) {
+  const pip = getPipDefinition(pipType);
+
+  return pip
+    ? {
+        type: pip.id,
+        instanceId: `pip-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      }
+    : null;
+}
+
 // Die positions 1-3 are always common, positions 4-5 are uncommon, and position 6 is rare.
 const dieFaces = [1, 1, 1, 2, 2, 3];
 const customDieFaceCount = 6;
+const customDieMaxFaceCount = 8;
+const pipDefinitions = {
+  cycles: {
+    id: "cycles",
+    name: "Cycles Pip",
+    shortName: "Cycles",
+    label: "+10 Cycles on roll",
+    className: "cycles-pip",
+  },
+  fortune: {
+    id: "fortune",
+    name: "Fortune Pip",
+    shortName: "Fortune",
+    label: "+10% roll chance",
+    className: "fortune-pip",
+  },
+  arcane: {
+    id: "arcane",
+    name: "Arcane Pip",
+    shortName: "Arcane",
+    label: "+1 Execution on roll",
+    className: "arcane-pip",
+  },
+};
 const levelRewardDieSideWeights = [
   { sides: 6, chance: 45 },
   { sides: 5, chance: 30 },
@@ -832,6 +926,13 @@ const supportedProgramEffectTypes = [
   "entangleAdjacent",
   "phaseThroughWalls",
   "deathTouchLine",
+  "implodeVisible",
+  "temporaryExecBoost",
+  "invertIncomingDamage",
+  "stunAllEnemies",
+  "damageLineFalloff",
+  "manifestDieFace",
+  "blinkAnywhere",
 ];
 const dice = [
   {
@@ -1130,24 +1231,28 @@ function getRandomFromPool(pool) {
 
 function createRoomTileCoords(tileCount, levelNode = null) {
   const zoneId = levelNode?.zoneId || "default";
+  const tier = Math.max(1, levelNode?.tier || 1);
+  let coords;
 
-  if (zoneId === "cindera") {
-    return createClusteredRoomCoords(tileCount);
+  if (tier >= 4) {
+    coords = createIslandRoomCoords(tileCount, levelNode);
+  } else if (zoneId === "cindera") {
+    coords = createClusteredRoomCoords(tileCount);
+  } else if (zoneId === "conclave") {
+    coords = createOrderedRoomCoords(tileCount, levelNode);
+  } else if (zoneId === "parcel7") {
+    coords = createIslandRoomCoords(tileCount, levelNode);
+  } else if (zoneId === "sestra") {
+    coords = createMeanderingRoomCoords(tileCount);
+  } else {
+    coords = createDefaultRoomCoords(tileCount);
   }
 
-  if (zoneId === "conclave") {
-    return createOrderedRoomCoords(tileCount, levelNode);
+  if (zoneId === "cindera" && tier >= 3) {
+    return addCinderaEmptyHexes(coords, tier);
   }
 
-  if (zoneId === "parcel7") {
-    return createIslandRoomCoords(tileCount, levelNode);
-  }
-
-  if (zoneId === "sestra") {
-    return createMeanderingRoomCoords(tileCount);
-  }
-
-  return createDefaultRoomCoords(tileCount);
+  return coords;
 }
 
 function createDefaultRoomCoords(tileCount) {
@@ -1228,6 +1333,67 @@ function createClusteredRoomCoords(tileCount) {
   });
 
   return coords.length >= tileCount ? coords : createDefaultRoomCoords(tileCount);
+}
+
+function areRoomCoordsConnected(coords) {
+  if (coords.length <= 1) {
+    return true;
+  }
+
+  const coordKeys = new Set(coords.map((coord) => tileKey(coord.q, coord.r)));
+  const visited = new Set([tileKey(coords[0].q, coords[0].r)]);
+  const queue = [coords[0]];
+
+  while (queue.length) {
+    const current = queue.shift();
+
+    getNeighborCoords(current).forEach((neighbor) => {
+      const key = tileKey(neighbor.q, neighbor.r);
+
+      if (!coordKeys.has(key) || visited.has(key)) {
+        return;
+      }
+
+      visited.add(key);
+      queue.push(neighbor);
+    });
+  }
+
+  return visited.size === coords.length;
+}
+
+function addCinderaEmptyHexes(coords, tier) {
+  if (coords.length < 18 || Math.random() > 0.82) {
+    return coords;
+  }
+
+  const targetEmptyHexes = Math.max(1, Math.min(4, Math.floor(coords.length / 28) + Math.floor((tier - 3) / 3)));
+  let nextCoords = [...coords];
+  let occupied = new Set(nextCoords.map((coord) => tileKey(coord.q, coord.r)));
+  const candidates = nextCoords
+    .filter((coord) => tileKey(coord.q, coord.r) !== tileKey(0, 0))
+    .filter((coord) => countOccupiedNeighborCoords(coord, occupied) >= 4)
+    .sort(() => Math.random() - 0.5);
+  let removedCount = 0;
+
+  for (const candidate of candidates) {
+    if (removedCount >= targetEmptyHexes) {
+      break;
+    }
+
+    const candidateKey = tileKey(candidate.q, candidate.r);
+    const trialCoords = nextCoords.filter((coord) => tileKey(coord.q, coord.r) !== candidateKey);
+
+    if (!areRoomCoordsConnected(trialCoords)) {
+      continue;
+    }
+
+    nextCoords = trialCoords;
+    occupied = new Set(nextCoords.map((coord) => tileKey(coord.q, coord.r)));
+    removedCount += 1;
+  }
+
+  return nextCoords;
 }
 
 function addOrderedRoomBlock(coords, occupied, center, width, height) {
@@ -1673,7 +1839,8 @@ function generateRoomTiles(roomConfig = getRoomConfigForTier(1), levelNode = nul
       tile.id !== artifactTile?.id &&
       !threadTileIds.includes(tile.id)
   );
-  const sigilPickups = getRandomOptions(sigilCandidates, roomConfig.sigilCount || 0).map((tile) => ({
+  const distantSigilCandidates = sigilCandidates.filter((tile) => getHexDistance(tile, tiles[0]) >= 3);
+  const sigilPickups = getRandomOptions(distantSigilCandidates.length ? distantSigilCandidates : sigilCandidates, roomConfig.sigilCount || 0).map((tile) => ({
     tileId: tile.id,
     sigil: rollSigilFromProfile(levelNode?.sigilProfile || {}),
   }));
@@ -1752,16 +1919,17 @@ function getLoadoutDieFaces(loadoutDie) {
 
   return Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, index) => {
     const sigil = loadoutDie?.faces?.[index];
-    return sigil ? getSigilDefinition(sigil.element, sigil.face || 1) : null;
+    const definition = sigil?.element ? getSigilDefinition(sigil.element, sigil.face || 1) : null;
+    return definition ? { ...definition, pips: [...(sigil.pips || [])] } : null;
   });
 }
 
 function getCustomDieSideCount(loadoutDie) {
   if (Number.isFinite(loadoutDie?.sides)) {
-    return Math.max(3, Math.min(customDieFaceCount, loadoutDie.sides));
+    return Math.max(3, Math.min(customDieMaxFaceCount, loadoutDie.sides));
   }
 
-  return Math.max(3, Math.min(customDieFaceCount, loadoutDie?.faces?.length || customDieFaceCount));
+  return Math.max(3, Math.min(customDieMaxFaceCount, loadoutDie?.faces?.length || customDieFaceCount));
 }
 
 function getLoadoutDieLabel(loadoutDie, index = 0) {
@@ -1795,7 +1963,7 @@ function getCharacterLoadoutElements(character) {
 }
 
 function createCustomDie(faces = [], sideCount = customDieFaceCount) {
-  const sides = Math.max(3, Math.min(customDieFaceCount, sideCount));
+  const sides = Math.max(3, Math.min(customDieMaxFaceCount, sideCount));
 
   return {
     id: `crafted-${Date.now()}`,
@@ -1804,7 +1972,12 @@ function createCustomDie(faces = [], sideCount = customDieFaceCount) {
     sides,
     faces: Array.from({ length: sides }, (_, index) => {
       const sigil = faces[index];
-      return sigil ? { element: sigil.element, face: sigil.face || 1 } : null;
+      return sigil
+        ? {
+            ...(sigil.element ? { element: sigil.element, face: sigil.face || 1 } : {}),
+            ...(Array.isArray(sigil.pips) && sigil.pips.length ? { pips: [...sigil.pips] } : {}),
+          }
+        : null;
     }),
   };
 }
@@ -1834,6 +2007,7 @@ function createTestModeCharacter() {
     artifacts: [],
     cycles: 0,
     sigilInventory: sigilElementIds.map((element) => ({ element, face: 1 })),
+    pipInventory: [createPipInstance("cycles"), createPipInstance("fortune")].filter(Boolean),
     mapState: {
       selectedNode: testNodeId,
       completedNodes: [],
@@ -1873,11 +2047,20 @@ function getSigilGlyphCycleCost(artifact) {
 
 function applyArtifactToCharacter(character, artifact, sigilProfile = {}) {
   character.artifacts = character.artifacts || [];
+  character.pipInventory = character.pipInventory || [];
   const artifactInstance = {
     ...artifact,
     instanceId: artifact.instanceId || `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   };
   const amount = Number.isFinite(artifact.amount) ? artifact.amount : 1;
+
+  if (artifact.type === "pip" || artifact.effect?.type === "pip") {
+    const pip = createPipInstance(artifact.effect?.pipType || artifact.pipType || artifact.id?.replace(/Pip$/, ""));
+    if (pip) {
+      character.pipInventory.push(pip);
+    }
+    return artifactInstance;
+  }
 
   if (artifact.effect?.type === "sigilGlyph" && !artifactInstance.sigil) {
     artifactInstance.sigil = rollSigilFromProfile(sigilProfile);
@@ -1887,7 +2070,7 @@ function applyArtifactToCharacter(character, artifact, sigilProfile = {}) {
     character.artifacts.push(artifactInstance);
   }
 
-  if (artifact.effect?.type === "temporaryActions") {
+  if (artifact.effect?.type === "temporaryActions" && !(artifactInstance.uses > 0)) {
     character.temporaryActionBoostAmount = Math.max(character.temporaryActionBoostAmount || 0, artifact.effect.amount || 1);
     character.temporaryActionBoostTurns = Math.max(character.temporaryActionBoostTurns || 0, artifact.effect.turns || 3);
     return artifactInstance;
@@ -1896,6 +2079,12 @@ function applyArtifactToCharacter(character, artifact, sigilProfile = {}) {
   if (artifact.effect?.type === "healIntegrity") {
     const healAmount = Number.isFinite(artifact.effect.amount) ? artifact.effect.amount : 1;
     character.stats.integrity = Math.min(character.stats.maxIntegrity, character.stats.integrity + healAmount);
+    return artifactInstance;
+  }
+
+  if (artifact.effect?.type === "addBlankDie") {
+    character.loadout = character.loadout || [];
+    character.loadout.push(createBlankDie(artifact.effect.sides || customDieFaceCount));
     return artifactInstance;
   }
 
@@ -1958,14 +2147,62 @@ function ensureProgramLibrary(character) {
   return character.programLibrary;
 }
 
+function getLoadoutDieRawFaces(loadoutDie) {
+  if (typeof loadoutDie === "string") {
+    return dieFaces.map((face) => ({ element: loadoutDie, face, pips: [] }));
+  }
+
+  return Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, index) => {
+    const face = loadoutDie?.faces?.[index] || null;
+
+    return face
+      ? {
+          element: face.element || null,
+          face: face.face || 1,
+          pips: Array.isArray(face.pips) ? [...face.pips] : [],
+        }
+      : { element: null, face: 1, pips: [] };
+  });
+}
+
+function getDieFaceRollIndex(rawFaces) {
+  const sideCount = rawFaces.length;
+  const fortuneFaceIndices = rawFaces
+    .map((face, index) => (face.pips || []).some((pip) => pip.type === "fortune") ? index : null)
+    .filter((index) => index !== null);
+
+  if (!fortuneFaceIndices.length || fortuneFaceIndices.length >= sideCount) {
+    return Math.floor(Math.random() * sideCount);
+  }
+
+  const baseChance = 1 / sideCount;
+  const boostedChance = baseChance + 0.1;
+  const boostedTotal = boostedChance * fortuneFaceIndices.length;
+  const otherChance = boostedTotal >= 1 ? 0 : (1 - boostedTotal) / (sideCount - fortuneFaceIndices.length);
+  const weights = rawFaces.map((_, index) => fortuneFaceIndices.includes(index) ? boostedChance : otherChance);
+  const roll = Math.random() * weights.reduce((total, weight) => total + weight, 0);
+  let cursor = 0;
+
+  for (let index = 0; index < weights.length; index += 1) {
+    cursor += weights[index];
+    if (roll <= cursor) {
+      return index;
+    }
+  }
+
+  return sideCount - 1;
+}
+
 function rollDie(loadoutDie) {
-  const faces = getLoadoutDieFaces(loadoutDie);
-  const faceIndex = Math.floor(Math.random() * faces.length);
-  const sigil = faces[faceIndex];
+  const rawFaces = getLoadoutDieRawFaces(loadoutDie);
+  const faceIndex = getDieFaceRollIndex(rawFaces);
+  const rawFace = rawFaces[faceIndex];
+  const sigil = rawFace?.element ? getSigilDefinition(rawFace.element, rawFace.face || 1) : null;
 
   return {
     faceIndex,
     sigil: sigil ? { element: sigil.element, face: sigil.face } : null,
+    pips: rawFace?.pips || [],
   };
 }
 
@@ -1984,11 +2221,32 @@ function renderProgramRequirement(program) {
     .join("");
 }
 
+function getProgramRequirementSymbols(program) {
+  return Array.isArray(program?.requirement) ? program.requirement : [];
+}
+
+function getProgramRequiredElements(program) {
+  return [...new Set(getProgramRequirementSymbols(program).map((requirement) => requirement.element).filter(Boolean))];
+}
+
+function getProgramAccent(program) {
+  const firstRequirement = getProgramRequirementSymbols(program)[0];
+  return getDieById(firstRequirement?.element)?.accent || "#f6f8ff";
+}
+
+function getProgramCooldownLabel(program) {
+  return program?.oncePerLevel || program?.cooldown === null || program?.cooldown === "-"
+    ? "-"
+    : Number.isFinite(program?.cooldown)
+      ? program.cooldown
+      : 0;
+}
+
 function renderProgramRewardChoice(program, attributes = "", className = "") {
-  const die = getDieById(program.element);
+  const accent = getProgramAccent(program);
 
   return `
-    <button class="secondary-action reward-choice program-reward-choice ${className}" type="button" ${attributes} style="--die-accent: ${die.accent}">
+    <button class="secondary-action reward-choice program-reward-choice ${className}" type="button" ${attributes} style="--die-accent: ${accent}">
       <span class="program-reward-heading">
         <span class="program-reward-symbols" aria-hidden="true">
           ${renderProgramRequirement(program)}
@@ -2107,19 +2365,21 @@ function renderPhysicalDamageProgram(castSymbols, allocatedSymbols = []) {
 function renderPrograms(programIds, castSymbols = null, options = {}) {
   const cacheLimit = Number.isFinite(options.cacheLimit) ? options.cacheLimit : programIds.length;
   const cooldownLockedProgramIds = options.cooldownLockedProgramIds || new Set();
+  const levelLockedProgramIds = options.levelLockedProgramIds || new Set();
   const cooldowns = options.cooldowns || {};
   const renderedPrograms = programIds
     .map((programId) => {
       const program = getProgramById(programId);
-      const die = getDieById(program.element);
+      const accent = getProgramAccent(program);
       const isOnCooldown = cooldownLockedProgramIds.has(program.id);
+      const isLevelLocked = levelLockedProgramIds.has(program.id);
       const cooldownRemaining = cooldowns[program.id] || 0;
-      const cooldownText = isOnCooldown ? `Cooling Down (${cooldownRemaining})` : "Ready";
+      const cooldownText = isLevelLocked ? "Used This Level" : isOnCooldown ? `Cooling Down (${cooldownRemaining})` : "Ready";
       const isAvailable = canCastProgram(program, castSymbols, cooldownLockedProgramIds);
       const allocatedSymbols = options.allocations?.[program.id] || [];
 
       return `
-        <article class="program-card ${isAvailable ? "" : "unavailable"}" data-program-id="${program.id}" style="--program-accent: ${die.accent}" tabindex="${isAvailable ? "0" : "-1"}" aria-disabled="${!isAvailable}">
+        <article class="program-card ${isAvailable ? "" : "unavailable"}" data-program-id="${program.id}" style="--program-accent: ${accent}" tabindex="${isAvailable ? "0" : "-1"}" aria-disabled="${!isAvailable}">
           <div class="program-row">
             <strong>${program.name}</strong>
             <div class="program-requirement">
@@ -2130,7 +2390,7 @@ function renderPrograms(programIds, castSymbols = null, options = {}) {
           ${renderAllocatedSymbols(allocatedSymbols)}
           <div class="program-tooltip">
             <strong>${program.name}</strong>
-            <span>${die.name} Program / Cooldown ${program.cooldown || 0}</span>
+            <span>Cooldown ${getProgramCooldownLabel(program)}</span>
             <p>${program.details}</p>
           </div>
         </article>
@@ -2245,14 +2505,25 @@ function getLevelCycleReward(turnNumber, maxTurns) {
   return 50;
 }
 
+function getLevelCycleTurnThreshold(currentTurns, maxTurns) {
+  if (maxTurns <= 0) {
+    return 0;
+  }
+
+  const thresholds = [0.4, 0.5, 0.8, 0.9, 1].map((ratio) => Math.max(1, Math.ceil(maxTurns * ratio)));
+  return thresholds.find((threshold) => currentTurns <= threshold) || maxTurns;
+}
+
 function renderCyclePanel(cycles = 0, reward = 0, currentTurns = 1, maxTurns = 0) {
+  const turnThreshold = getLevelCycleTurnThreshold(currentTurns, maxTurns);
+
   return `
     <div class="cycle-panel" aria-label="Cycles and level reward">
       <div class="cycle-tracker" aria-label="Cycles">
         <img src="${cyclesCurrencyImage}" alt="">
         <span>Cycles</span>
         <strong>${cycles} <em>+${reward}</em></strong>
-        <small>${currentTurns} / ${maxTurns}</small>
+        <small>Turns: ${currentTurns} / ${turnThreshold}</small>
       </div>
     </div>
   `;
@@ -2279,6 +2550,7 @@ function renderRollDieOptions(character, selectedRollSlots, castSymbols = null) 
       return `
         <button class="roll-die-option ${isSelected ? "selected" : ""}" type="button" data-roll-slot="${index}" style="--die-accent: ${accent}" aria-pressed="${isSelected}">
           ${renderSigilDieImage(symbol, "current result")}
+          ${(symbol.pips || []).map((pip) => renderPipMarker(pip)).join("")}
           <strong>Die ${index + 1}</strong>
         </button>
       `;
@@ -2307,8 +2579,8 @@ function renderRollResultSlots(
         const rollingResult = rollingResultIndex >= 0 && results[rollingResultIndex] ? results[rollingResultIndex] : null;
         const displaySymbol = rollingResult
           ? rollingResult.sigil
-            ? { element: rollingResult.sigil.element, face: rollingResult.sigil.face }
-            : { blank: true }
+            ? { element: rollingResult.sigil.element, face: rollingResult.sigil.face, pips: rollingResult.pips || [] }
+            : { blank: true, pips: rollingResult.pips || [] }
           : symbol;
         const displayDie = displaySymbol.blank ? null : getDieById(displaySymbol.element);
         const isAssignable = assignableResultIndices.has(symbol.resultIndex);
@@ -2317,6 +2589,7 @@ function renderRollResultSlots(
         return `
           <div class="roll-result ${isAssignable ? "assignable" : ""} ${isRollingSlot ? "rolling" : ""} ${displaySymbol.blank ? "blank-result" : ""}" data-result-index="${symbol.resultIndex}" style="--die-accent: ${displaySymbol.blank ? getLoadoutDieAccent(character.loadout[symbol.slotIndex]) : displayDie.accent}">
             <span>Die ${symbol.slotIndex + 1}</span>
+            ${(displaySymbol.pips || []).map((pip) => renderPipMarker(pip)).join("")}
             ${renderSigilDieImage(displaySymbol, "result")}
             <strong>${displaySymbol.blank ? "Blank" : displayDie.name}</strong>
           </div>
@@ -2338,6 +2611,7 @@ function renderRollResultSlots(
       return `
         <div class="roll-result ${sigil.blank ? "blank-result" : ""}" data-result-index="${resultIndex}" style="--die-accent: ${sigil.blank ? getLoadoutDieAccent(character.loadout[slotIndex]) : die.accent}">
           <span>Die ${slotIndex + 1}</span>
+          ${(rollResult?.pips || []).map((pip) => renderPipMarker(pip)).join("")}
           ${renderSigilDieImage(sigil, "result")}
           <strong>${sigil.blank ? "Blank" : die.name}</strong>
         </div>
@@ -2353,6 +2627,7 @@ function getCastSymbols(character, selectedRollSlots, results) {
     element: results[resultIndex]?.sigil?.element || null,
     face: results[resultIndex]?.sigil?.face || null,
     faceIndex: results[resultIndex]?.faceIndex ?? null,
+    pips: results[resultIndex]?.pips || [],
     blank: !results[resultIndex]?.sigil,
   }));
 }
@@ -2369,6 +2644,20 @@ function getAvailableSigilGlyphSymbols(character) {
       faceIndex: null,
       blank: false,
     }));
+}
+
+function getRollPipCycleReward(results) {
+  return results.reduce(
+    (total, result) => total + (result.pips || []).filter((pip) => pip.type === "cycles").length * 10,
+    0
+  );
+}
+
+function getRollPipExecutionBonus(results) {
+  return results.reduce(
+    (total, result) => total + (result.pips || []).filter((pip) => pip.type === "arcane").length,
+    0
+  );
 }
 
 function findProgramAllocation(program, castSymbols) {
@@ -2438,6 +2727,11 @@ function markSymbolsSpent(castSymbols, symbolsToSpend) {
 }
 
 function getArtifactDisplayLabel(artifact) {
+  if (artifact.type === "pip" || artifact.effect?.type === "pip") {
+    const pip = getPipDefinition(artifact.effect?.pipType || artifact.pipType);
+    return artifact.label || pip?.label || "Crafting pip";
+  }
+
   const sigil = artifact.sigil ? getSigilDefinition(artifact.sigil.element, artifact.sigil.face) : null;
   const sigilText = sigil ? ` (${sigilRarityLabels[artifact.sigil.face || 1]} ${sigil.name})` : "";
   const usesText = Number.isFinite(artifact.uses) ? ` - ${artifact.uses} use${artifact.uses === 1 ? "" : "s"}` : "";
@@ -2448,6 +2742,10 @@ function getArtifactDisplayLabel(artifact) {
 function getArtifactImage(artifact) {
   if (artifact.image) {
     return artifact.image;
+  }
+
+  if (artifact.type === "pip" || artifact.effect?.type === "pip") {
+    return "artifact_1.png";
   }
 
   if (artifact.effect?.type === "sigilGlyph" && artifact.sigil) {
@@ -2645,6 +2943,7 @@ function normalizeLoadedCharacter(character) {
     artifacts: Array.isArray(character?.artifacts) ? character.artifacts : [],
     cycles: Number.isFinite(character?.cycles) ? character.cycles : 0,
     sigilInventory: Array.isArray(character?.sigilInventory) ? character.sigilInventory : [],
+    pipInventory: Array.isArray(character?.pipInventory) ? character.pipInventory : [],
     mapState: character?.mapState || cloneSaveData(startingMapState),
   };
 }
@@ -3204,6 +3503,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   character.nextTurnExecBonus = character.nextTurnExecBonus || 0;
   let programCooldowns = character.programCooldowns;
   let cooldownLockedProgramIds = new Set();
+  character.levelLockedProgramIds = savedRoomState?.levelLockedProgramIds || [];
+  let levelLockedProgramIds = new Set(character.levelLockedProgramIds);
   let temporaryExecutionBonusThisTurn = savedRoomState?.temporaryExecutionBonusThisTurn || character.nextTurnExecBonus;
   let executionRollsRemaining = Number.isFinite(savedRoomState?.executionRollsRemaining)
     ? savedRoomState.executionRollsRemaining
@@ -3238,7 +3539,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         <div id="program-list-items">
           ${renderPrograms(character.programs, null, {
             cacheLimit: character.stats.cache,
-            cooldownLockedProgramIds,
+            cooldownLockedProgramIds: getLockedProgramIds(),
+            levelLockedProgramIds,
             cooldowns: programCooldowns,
           })}
         </div>
@@ -3274,7 +3576,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
           ${renderArtifactStrip(character.artifacts || [])}
           ${renderCharacterStats(character.stats, temporaryExecutionBonusThisTurn + character.nextTurnExecBonus, character.temporaryActionBoostTurns > 0 ? character.temporaryActionBoostAmount || 1 : 0)}
           ${renderProgressionTracker(character.progression)}
-          <button class="secondary-action change-programs-action" type="button" id="change-programs-action">Change Programs</button>
+          <p class="room-status-panel" id="room-status">Spend Actions to move or Sigil-Cast. Movement remains adjacent unless a program says otherwise.</p>
           ${renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length)}
         </div>
 
@@ -3305,10 +3607,12 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       </section>
 
       <footer class="room-footer">
-        <p id="room-status">Spend Actions to move or Sigil-Cast. Movement remains adjacent unless a program says otherwise.</p>
         <div class="room-actions">
+          <span class="room-actions-label">Actions:</span>
           <button class="primary-action move-action" type="button" id="move-action">Move</button>
           <button class="primary-action roll-action" type="button" id="roll-action">Sigil-Cast</button>
+          <button class="primary-action room-utility-action" type="button" id="change-programs-action">Programs</button>
+          <button class="primary-action room-utility-action" type="button" id="room-crafting-action">Crafting</button>
           <button class="primary-action turn-action" type="button" id="end-turn-action">End Turn</button>
         </div>
       </footer>
@@ -3334,6 +3638,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   const rollConfirm = document.querySelector("#roll-confirm");
   const roomHoverTooltip = document.querySelector("#room-hover-tooltip");
   const changeProgramsButton = document.querySelector("#change-programs-action");
+  const roomCraftingButton = document.querySelector("#room-crafting-action");
   const saveGameButton = document.querySelector("#save-game-action");
   const selectedRollSlots = [];
   let currentCastSymbols = null;
@@ -3363,6 +3668,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       nextTurnExecBonus: character.nextTurnExecBonus,
       programCooldowns: { ...programCooldowns },
       cooldownLockedProgramIds: [...cooldownLockedProgramIds],
+      levelLockedProgramIds: [...levelLockedProgramIds],
       integrity: character.stats.integrity,
       maxIntegrity: character.stats.maxIntegrity,
       enemies: activeEnemies.map((enemy) => ({
@@ -3373,6 +3679,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         confusedTurns: enemy.confusedTurns || 0,
         stunnedTurns: enemy.stunnedTurns || 0,
         accuracySuppressedTurns: enemy.accuracySuppressedTurns || 0,
+        proximityAttackedThisTurn: Boolean(enemy.proximityAttackedThisTurn),
       })),
       collectedThreads: collectedThreadTileIds.length,
       totalThreads: riftThreadTileIds.length,
@@ -3434,6 +3741,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         executionRollsRemaining,
         temporaryExecutionBonusThisTurn,
         programCooldowns: { ...programCooldowns },
+        levelLockedProgramIds: [...levelLockedProgramIds],
         temporaryRevealTileIds: [...temporaryRevealTileIds],
         sightRangeBonus,
         sightRangeBonusTurnsRemaining,
@@ -3513,7 +3821,122 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     indicator.className = `damage-indicator ${variant === "player" ? "player-damage" : "enemy-damage"}`;
     indicator.textContent = `-${amount}`;
     tileElement.appendChild(indicator);
+    if (variant === "player" && amount > 0) {
+      shakeCharacterToken();
+    }
     window.setTimeout(() => indicator.remove(), 900);
+  }
+
+  function resolveIncomingPlayerAttacks(hitEnemies) {
+    const rawIncomingDamage = hitEnemies.reduce((total, enemy) => total + (enemy.stats.power || 1), 0);
+
+    if (character.damageShieldTurns > 0) {
+      return {
+        rawIncomingDamage,
+        incomingDamage: 0,
+        healedDamage: 0,
+        invertedCount: 0,
+        shielded: true,
+      };
+    }
+
+    let incomingDamage = 0;
+    let healedDamage = 0;
+    let invertedCount = 0;
+
+    hitEnemies.forEach((enemy) => {
+      const attackDamage = enemy.stats.power || 1;
+
+      if ((character.damageInversionCharges || 0) > 0) {
+        character.damageInversionCharges = Math.max(0, (character.damageInversionCharges || 0) - 1);
+        healedDamage += attackDamage;
+        invertedCount += 1;
+      } else {
+        incomingDamage += attackDamage;
+      }
+    });
+
+    if (healedDamage > 0) {
+      character.stats.integrity = Math.min(character.stats.maxIntegrity, character.stats.integrity + healedDamage);
+    }
+
+    if (incomingDamage > 0) {
+      character.stats.integrity = Math.max(0, character.stats.integrity - incomingDamage);
+    }
+
+    return {
+      rawIncomingDamage,
+      incomingDamage,
+      healedDamage,
+      invertedCount,
+      shielded: false,
+    };
+  }
+
+  function resolveProgramEnemyDamage(enemy, rawDamage, defenseStat, options = {}) {
+    const enemyIntegrityBefore = enemy.stats.integrity;
+    const tileId = enemy.positionId;
+    const dealtDamage = options.ignoreDefense ? Math.max(0, rawDamage) : Math.max(0, rawDamage - (enemy.stats[defenseStat] || 0));
+    let didLevelUp = false;
+
+    enemy.stats.integrity = Math.max(0, enemy.stats.integrity - dealtDamage);
+
+    if (enemyIntegrityBefore > 0 && enemy.stats.integrity <= 0) {
+      didLevelUp = addCharacterXp(character, enemy.xpValue);
+      maybeDropCycles(enemy.positionId, enemy);
+      enemy.positionId = null;
+      enemy.stunnedTurns = 0;
+      enemy.proximityAttackedThisTurn = false;
+    }
+
+    return {
+      enemy,
+      tileId,
+      dealtDamage,
+      didDefeat: enemyIntegrityBefore > 0 && enemy.stats.integrity <= 0,
+      didLevelUp,
+    };
+  }
+
+  function resolveMultiEnemyProgramDamage(targetEnemies, getRawDamage, defenseStat, options = {}) {
+    return targetEnemies.map((enemy) => resolveProgramEnemyDamage(enemy, getRawDamage(enemy), defenseStat, options));
+  }
+
+  function shakeCharacterToken() {
+    const token = roomGrid.querySelector(".character-token");
+
+    if (!token) {
+      return;
+    }
+
+    token.classList.remove("damage-shake");
+    void token.offsetWidth;
+    token.classList.add("damage-shake");
+    window.setTimeout(() => token.classList.remove("damage-shake"), 360);
+  }
+
+  function showCyclePipIndicator(slotIndex, amount = 10) {
+    const rollResult = rollResults.querySelector(`[data-result-index="${slotIndex}"]`);
+
+    if (!rollResult) {
+      return;
+    }
+
+    const indicator = document.createElement("span");
+    indicator.className = "damage-indicator cycle-pip-indicator";
+    indicator.textContent = `+${amount}`;
+    rollResult.appendChild(indicator);
+    window.setTimeout(() => indicator.remove(), 900);
+  }
+
+  function showCyclePipIndicators(results, rolledSlotIndices) {
+    results.forEach((result, resultIndex) => {
+      const amount = (result.pips || []).filter((pip) => pip.type === "cycles").length * 10;
+
+      if (amount > 0) {
+        showCyclePipIndicator(rolledSlotIndices[resultIndex], amount);
+      }
+    });
   }
 
   function animateRiftGhoulBolt(enemy) {
@@ -3557,13 +3980,28 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   function resolveProximityEnemyAttacks() {
+    getLivingEnemies()
+      .filter((enemy) => enemy.proximityAttack)
+      .forEach((enemy) => {
+        if (!isEnemyAdjacentToPlayer(roomTiles, enemy, characterPositionId, wallEdges)) {
+          enemy.proximityAttackedThisTurn = false;
+        }
+      });
+
     const proximityEnemies = getLivingEnemies().filter(
-      (enemy) => enemy.proximityAttack && isEnemyAdjacentToPlayer(roomTiles, enemy, characterPositionId, wallEdges)
+      (enemy) =>
+        enemy.proximityAttack &&
+        !enemy.proximityAttackedThisTurn &&
+        isEnemyAdjacentToPlayer(roomTiles, enemy, characterPositionId, wallEdges)
     );
 
     if (!proximityEnemies.length) {
       return null;
     }
+
+    proximityEnemies.forEach((enemy) => {
+      enemy.proximityAttackedThisTurn = true;
+    });
 
     const attackResults = proximityEnemies.map((enemy) => ({
       enemy,
@@ -3571,16 +4009,19 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     }));
     const hitResults = attackResults.filter((result) => result.didHit);
     const missedResults = attackResults.filter((result) => !result.didHit);
-    const incomingDamage = hitResults.reduce((total, result) => total + (result.enemy.stats.power || 1), 0);
-
-    if (incomingDamage > 0) {
-      character.stats.integrity = Math.max(0, character.stats.integrity - incomingDamage);
-    }
+    const damageResult = resolveIncomingPlayerAttacks(hitResults.map((result) => result.enemy));
+    const { rawIncomingDamage, incomingDamage, healedDamage, invertedCount } = damageResult;
 
     const statusParts = [];
 
     if (hitResults.length) {
-      statusParts.push(`${hitResults.map((result) => result.enemy.name).join(", ")} hit for ${incomingDamage} Integrity.`);
+      statusParts.push(
+        damageResult.shielded
+          ? `${hitResults.map((result) => result.enemy.name).join(", ")} hit, but Mag Shield blocks ${rawIncomingDamage} damage.`
+          : invertedCount > 0
+          ? `${invertedCount} incoming ${invertedCount === 1 ? "attack heals" : "attacks heal"} ${healedDamage} Integrity. ${incomingDamage > 0 ? `${incomingDamage} damage gets through.` : ""}`
+          : `${hitResults.map((result) => result.enemy.name).join(", ")} hit for ${incomingDamage} Integrity.`
+      );
     }
 
     if (missedResults.length) {
@@ -3592,6 +4033,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       hits: hitResults.map((result) => result.enemy.instanceId),
       misses: missedResults.map((result) => result.enemy.instanceId),
       incomingDamage,
+      rawIncomingDamage,
       state: getRoomDebugState(),
     });
 
@@ -3630,6 +4072,13 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         body: collectedCacheTileIds.includes(tile.id)
           ? "Accessed. Program cache already downloaded."
           : "Access to add a new program to your library.",
+      };
+    }
+
+    if (tile.type === "rift") {
+      return {
+        title: "Rift Hex",
+        body: "Can be closed after collecting all Rift Threads.",
       };
     }
 
@@ -3721,7 +4170,22 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     return roomGrid.querySelector(".character-token")?.getBoundingClientRect() || null;
   }
 
-  function animateCharacterMovement(previousRect) {
+  function estimateCharacterTokenRectForTile(tileId, tokenRect) {
+    const tileElement = roomGrid.querySelector(`[data-tile-id="${tileId}"]`);
+
+    if (!tileElement || !tokenRect) {
+      return null;
+    }
+
+    const tileRect = tileElement.getBoundingClientRect();
+
+    return {
+      left: tileRect.left + tileRect.width / 2 - tokenRect.width / 2,
+      top: tileRect.top + tileRect.height / 2 - tokenRect.height * 0.54,
+    };
+  }
+
+  function animateCharacterMovement(previousRect, pathTileIds = []) {
     const token = roomGrid.querySelector(".character-token");
 
     if (!token || !previousRect) {
@@ -3729,20 +4193,25 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     }
 
     const currentRect = token.getBoundingClientRect();
-    const deltaX = previousRect.left - currentRect.left;
-    const deltaY = previousRect.top - currentRect.top;
+    const waypointRects = pathTileIds
+      .slice(0, -1)
+      .map((tileId) => estimateCharacterTokenRectForTile(tileId, currentRect))
+      .filter(Boolean);
+    const travelRects = [previousRect, ...waypointRects, currentRect];
 
-    if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+    if (travelRects.every((rect) => Math.abs(rect.left - currentRect.left) < 1 && Math.abs(rect.top - currentRect.top) < 1)) {
       return Promise.resolve();
     }
 
+    const keyframes = travelRects.map((rect) => ({
+      transform: `translate(calc(-50% + ${rect.left - currentRect.left}px), calc(-54% + ${rect.top - currentRect.top}px))`,
+    }));
+    keyframes[keyframes.length - 1] = { transform: "translate(-50%, -54%)" };
+
     return token.animate(
-      [
-        { transform: `translate(calc(-50% + ${deltaX}px), calc(-54% + ${deltaY}px))` },
-        { transform: "translate(-50%, -54%)" },
-      ],
+      keyframes,
       {
-        duration: 360,
+        duration: Math.min(760, Math.max(300, 150 * Math.max(1, travelRects.length - 1))),
         easing: "cubic-bezier(0.22, 0.8, 0.24, 1)",
       }
     ).finished.catch(() => null);
@@ -3894,7 +4363,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       <section class="all-derezzed-panel" role="dialog" aria-modal="true" aria-labelledby="all-derezzed-title">
         <p class="signal">Area Secured</p>
         <h2 id="all-derezzed-title">All Glitchspawn Derezzed</h2>
-        <p>Enemy turns are skipped. Movement is unrestricted while you finish the room objective.</p>
+        <p>Enemy turns are skipped while you finish the room objective. Movement still costs Actions.</p>
         <button class="primary-action" type="button" id="continue-secured-room">Continue</button>
       </section>
     `;
@@ -3903,15 +4372,21 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     overlay.querySelector("#continue-secured-room").focus();
     overlay.querySelector("#continue-secured-room").addEventListener("click", () => {
       overlay.remove();
-      isMoveMode = true;
-      roomStage.classList.add("movement-active");
+      isMoveMode = actionPointsRemaining > 0;
+      roomStage.classList.toggle("movement-active", isMoveMode);
       updateRoom({ centerCamera: false });
-      roomStatus.textContent = "All Glitchspawn derezzed. Movement is unrestricted.";
+      roomStatus.textContent = actionPointsRemaining > 0
+        ? "All Glitchspawn derezzed. Enemy turns are skipped. Movement still costs Actions."
+        : "All Glitchspawn derezzed. Enemy turns are skipped. Actions spent for this turn.";
     });
     gameLog("room.allEnemiesDerezzed", getRoomDebugState());
   }
 
   function beginPlayerTurn() {
+    getLivingEnemies().forEach((enemy) => {
+      enemy.proximityAttackedThisTurn = false;
+    });
+
     cooldownLockedProgramIds = new Set(
       Object.entries(programCooldowns)
         .filter(([, remaining]) => remaining > 0)
@@ -3928,19 +4403,39 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       }
     });
 
-    const execBonus = character.nextTurnExecBonus || 0;
+    const recurringExecBonus = character.temporaryExecutionBoostTurns > 0 ? character.temporaryExecutionBoostAmount || 1 : 0;
+    const execBonus = (character.nextTurnExecBonus || 0) + recurringExecBonus;
     temporaryExecutionBonusThisTurn = execBonus;
     const actionBoostAmount = character.temporaryActionBoostTurns > 0 ? character.temporaryActionBoostAmount || 1 : 0;
     actionPointsRemaining = character.stats.move + actionBoostAmount;
     executionRollsRemaining = character.stats.exec + temporaryExecutionBonusThisTurn;
     character.nextTurnExecBonus = 0;
+    if (character.temporaryExecutionBoostTurns > 0) {
+      character.temporaryExecutionBoostTurns -= 1;
+    }
     if (character.temporaryActionBoostTurns > 0) {
       character.temporaryActionBoostTurns -= 1;
+    }
+    if (character.damageShieldTurns > 0) {
+      character.damageShieldTurns -= 1;
+    }
+    if (character.moveActionRangeBonusTurns > 0) {
+      character.moveActionRangeBonusTurns -= 1;
     }
     return execBonus;
   }
 
+  function getMoveActionStepValue() {
+    return 1 + (character.moveActionRangeBonusTurns > 0 ? character.moveActionRangeBonusAmount || 1 : 0);
+  }
+
   function startProgramCooldown(program) {
+    if (program.oncePerLevel || program.cooldown === null || program.cooldown === "-") {
+      levelLockedProgramIds.add(program.id);
+      character.levelLockedProgramIds = [...levelLockedProgramIds];
+      return;
+    }
+
     const cooldown = Number.isFinite(program.cooldown) ? program.cooldown : 0;
 
     if (cooldown <= 0) {
@@ -3949,6 +4444,10 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
     programCooldowns[program.id] = Math.max(programCooldowns[program.id] || 0, cooldown);
     cooldownLockedProgramIds.add(program.id);
+  }
+
+  function getLockedProgramIds() {
+    return new Set([...cooldownLockedProgramIds, ...levelLockedProgramIds]);
   }
 
   function markProgramAllocated(programId, program, allocatedSymbols) {
@@ -4010,6 +4509,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       enemy.positionId = null;
       enemy.confusedTurns = 0;
       enemy.stunnedTurns = 0;
+      enemy.proximityAttackedThisTurn = false;
     }
 
     return {
@@ -4034,8 +4534,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     const shouldCenterCamera = options.centerCamera !== false;
     const isPlayerPhase = turnPhase === "player";
     const securedRoom = isRoomSecured();
-    const canMove = securedRoom || actionPointsRemaining > 0;
-    const movementRange = securedRoom ? roomTiles.length : actionPointsRemaining;
+    const canMove = actionPointsRemaining > 0;
+    const canUseActionUtility = isPlayerPhase && !isLevelComplete && !isRunDefeated && !isRunecastingActive && !pendingAttack && !isBlinkTargetMode && actionPointsRemaining > 0;
+    const movementRange = actionPointsRemaining * getMoveActionStepValue();
     const occupiedEnemyTileIds = getOccupiedEnemyTileIds(activeEnemies);
     const movementBlockedTileIds = phaseThroughEnemiesTurnsRemaining > 0 ? [] : occupiedEnemyTileIds;
     const playerWallEdges = getPlayerWallEdges();
@@ -4091,13 +4592,17 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     );
     document.querySelector(".thread-tracker").outerHTML = renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length);
     moveButton.disabled = !isPlayerPhase || !canMove;
-    moveButton.textContent = securedRoom ? "Move (Free)" : actionPointsRemaining > 0 ? `Move (${actionPointsRemaining})` : "Actions Spent";
+    moveButton.textContent = actionPointsRemaining > 0 ? `Move (${actionPointsRemaining})` : "Actions Spent";
     rollButton.disabled = !isPlayerPhase || isLevelComplete || isRunDefeated || actionPointsRemaining <= 0 || isRunecastingActive;
     rollButton.textContent = isRunecastingActive
       ? "Sigil-Casting"
       : actionPointsRemaining > 0
         ? `Sigil-Cast (${actionPointsRemaining})`
         : "Actions Spent";
+    changeProgramsButton.disabled = !canUseActionUtility;
+    changeProgramsButton.textContent = actionPointsRemaining > 0 ? `Programs (${actionPointsRemaining})` : "Actions Spent";
+    roomCraftingButton.disabled = !canUseActionUtility;
+    roomCraftingButton.textContent = actionPointsRemaining > 0 ? `Crafting (${actionPointsRemaining})` : "Actions Spent";
     endTurnButton.disabled = !isPlayerPhase || isLevelComplete || isRunDefeated;
     rollConfirm.disabled = rollConfirm.disabled || !isPlayerPhase;
     turnPhaseBanner.textContent = isPlayerPhase ? "Player Turn" : "Glitchspawn Turn";
@@ -4109,15 +4614,21 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       roomStatus.textContent = "Integrity depleted. Run terminated.";
       moveButton.disabled = true;
       rollButton.disabled = true;
+      changeProgramsButton.disabled = true;
+      roomCraftingButton.disabled = true;
       endTurnButton.disabled = true;
     } else if (isLevelComplete) {
       roomStatus.textContent = "Rift closed. Level complete.";
       moveButton.disabled = true;
       moveButton.textContent = "Level Complete";
+      changeProgramsButton.disabled = true;
+      roomCraftingButton.disabled = true;
     } else if (securedRoom && isMoveMode) {
-      roomStatus.textContent = "All Glitchspawn derezzed. Choose adjacent hexes freely.";
+      roomStatus.textContent = `All Glitchspawn derezzed. Choose a highlighted hex. ${actionPointsRemaining} ${actionPointsRemaining === 1 ? "action" : "actions"} remaining this turn.`;
     } else if (securedRoom) {
-      roomStatus.textContent = "All Glitchspawn derezzed. Enemy turns are skipped and movement is unrestricted.";
+      roomStatus.textContent = actionPointsRemaining > 0
+        ? "All Glitchspawn derezzed. Enemy turns are skipped. Movement still costs Actions."
+        : "All Glitchspawn derezzed. Enemy turns are skipped. Actions spent for this turn.";
     } else if (isBlinkTargetMode) {
       roomStatus.textContent = "Choose a highlighted hex exactly 2 spaces away in a straight line.";
     } else if (pendingAttack) {
@@ -4137,7 +4648,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   moveButton.addEventListener("click", () => {
-    if (turnPhase !== "player" || (!isRoomSecured() && actionPointsRemaining <= 0) || isLevelComplete || isRunDefeated) {
+    if (turnPhase !== "player" || actionPointsRemaining <= 0 || isLevelComplete || isRunDefeated) {
       return;
     }
 
@@ -4166,7 +4677,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       return;
     }
 
-    const movementRange = isRoomSecured() ? roomTiles.length : actionPointsRemaining;
+    const movementRange = actionPointsRemaining * getMoveActionStepValue();
     const occupiedEnemyTileIds = getOccupiedEnemyTileIds(activeEnemies);
 
     if (occupiedEnemyTileIds.includes(targetTileId)) {
@@ -4299,8 +4810,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       if (execBonus > 0) {
         turnStatus += ` FOCUS adds ${execBonus} temporary ${execBonus === 1 ? "Execution" : "Executions"} this turn.`;
       }
-      if (cooldownLockedProgramIds.size) {
-        turnStatus += ` ${[...cooldownLockedProgramIds].map((programId) => getProgramById(programId)?.name || programId).join(", ")} ${cooldownLockedProgramIds.size === 1 ? "is" : "are"} cooling down.`;
+      const lockedProgramIds = getLockedProgramIds();
+      if (lockedProgramIds.size) {
+        turnStatus += ` ${[...lockedProgramIds].map((programId) => getProgramById(programId)?.name || programId).join(", ")} ${lockedProgramIds.size === 1 ? "is" : "are"} unavailable.`;
       }
       roomStatus.textContent = turnStatus;
       gameLog("turn.end.skippedSecuredRoom", { status: turnStatus, state: getRoomDebugState() });
@@ -4349,7 +4861,11 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     const isShelteredByHaven = characterTile?.type === "haven";
     const attackingEnemies = isShelteredByHaven
       ? []
-      : activeEnemies.filter((enemy) => canEnemyAttackPlayer(roomTiles, enemy, characterPositionId, activeEnemies, wallEdges));
+      : activeEnemies.filter(
+          (enemy) =>
+            canEnemyAttackPlayer(roomTiles, enemy, characterPositionId, activeEnemies, wallEdges) &&
+            !(enemy.proximityAttack && enemy.proximityAttackedThisTurn)
+        );
     const stunnedEnemies = getLivingEnemies().filter((enemy) => (enemy.stunnedTurns || 0) > 0);
     const stunnedEnemyIds = new Set(stunnedEnemies.map((enemy) => enemy.instanceId));
     let turnStatus = movedEnemies.length
@@ -4419,10 +4935,15 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     const didConfuseLevelUp = confusedAttackResults.some((result) => result.damageResult?.didLevelUp);
 
     if (playerAttackingEnemies.length) {
-      incomingDamage = hitEnemies.reduce((total, enemy) => total + enemy.stats.power, 0);
-      character.stats.integrity = Math.max(0, character.stats.integrity - incomingDamage);
+      const damageResult = resolveIncomingPlayerAttacks(hitEnemies);
+      const { rawIncomingDamage, healedDamage, invertedCount } = damageResult;
+      incomingDamage = damageResult.incomingDamage;
       if (hitEnemies.length) {
-        turnStatus += ` ${hitEnemies.map((enemy) => enemy.name).join(", ")} hit for ${incomingDamage} damage.`;
+        turnStatus += damageResult.shielded
+          ? ` ${hitEnemies.map((enemy) => enemy.name).join(", ")} hit, but Mag Shield blocks ${rawIncomingDamage} damage.`
+          : invertedCount > 0
+          ? ` ${invertedCount} incoming ${invertedCount === 1 ? "attack heals" : "attacks heal"} ${healedDamage} Integrity.${incomingDamage > 0 ? ` ${incomingDamage} damage gets through.` : ""}`
+          : ` ${hitEnemies.map((enemy) => enemy.name).join(", ")} hit for ${incomingDamage} damage.`;
       }
       if (missedEnemies.length) {
         turnStatus += ` ${missedEnemies.map((enemy) => enemy.name).join(", ")} ${missedEnemies.length === 1 ? "misses" : "miss"}.`;
@@ -4481,8 +5002,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     if (execBonus > 0) {
       turnStatus += ` FOCUS adds ${execBonus} temporary ${execBonus === 1 ? "Execution" : "Executions"} this turn.`;
     }
-    if (cooldownLockedProgramIds.size) {
-      turnStatus += ` ${[...cooldownLockedProgramIds].map((programId) => getProgramById(programId)?.name || programId).join(", ")} ${cooldownLockedProgramIds.size === 1 ? "is" : "are"} cooling down.`;
+    const lockedProgramIds = getLockedProgramIds();
+    if (lockedProgramIds.size) {
+      turnStatus += ` ${[...lockedProgramIds].map((programId) => getProgramById(programId)?.name || programId).join(", ")} ${lockedProgramIds.size === 1 ? "is" : "are"} unavailable.`;
     }
     roomStatus.textContent = turnStatus;
     gameLog("turn.end.resolved", {
@@ -4525,11 +5047,12 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   function updateProgramAvailability() {
-    programListItems.innerHTML = renderPrograms(character.programs, getCastSymbolsWithGlyphs(), {
+    programListItems.innerHTML = renderPrograms(character.programs, isRunecastingActive ? getCastSymbolsWithGlyphs() : null, {
       showPhysicalFallback: isRunecastingActive,
       allocations: allocatedProgramSymbols,
       cacheLimit: character.stats.cache,
-      cooldownLockedProgramIds,
+      cooldownLockedProgramIds: getLockedProgramIds(),
+      levelLockedProgramIds,
       cooldowns: programCooldowns,
     });
   }
@@ -4667,9 +5190,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
     return getRandomOptions(
       Object.values(programs).filter((program) => {
-        const requiredElements = Array.isArray(program.requirement) && program.requirement.length
-          ? program.requirement.map((requirement) => requirement.element)
-          : [program.element];
+        const requiredElements = getProgramRequiredElements(program);
 
         return !ownedPrograms.has(program.id) && requiredElements.some((element) => loadoutElements.has(element));
       }),
@@ -4711,6 +5232,73 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       return;
     }
 
+    if (artifact.effect?.type === "temporaryActions") {
+      const actionBoostAmount = artifact.effect.amount || 1;
+      const actionBoostTurns = artifact.effect.turns || 3;
+      const grantsCurrentTurnAction = turnPhase === "player" && !isLevelComplete && !isRunDefeated;
+      character.temporaryActionBoostAmount = Math.max(character.temporaryActionBoostAmount || 0, actionBoostAmount);
+      character.temporaryActionBoostTurns = Math.max(
+        character.temporaryActionBoostTurns || 0,
+        grantsCurrentTurnAction ? Math.max(0, actionBoostTurns - 1) : actionBoostTurns
+      );
+      if (grantsCurrentTurnAction) {
+        actionPointsRemaining += actionBoostAmount;
+      }
+      consumeArtifactUse(artifact);
+      updateRoom();
+      roomStatus.textContent = grantsCurrentTurnAction
+        ? `${artifact.name} adds ${actionBoostAmount} Action now and for the next ${character.temporaryActionBoostTurns} turns.`
+        : `${artifact.name} will add ${actionBoostAmount} Action for the next ${character.temporaryActionBoostTurns} turns.`;
+      return;
+    }
+
+    if (artifact.effect?.type === "revealEnemiesDamage") {
+      const targetTileIds = getLivingEnemies().map((enemy) => enemy.positionId).filter(Boolean);
+
+      if (!targetTileIds.length) {
+        roomStatus.textContent = `${artifact.name} found no enemies.`;
+        return;
+      }
+
+      temporaryRevealTileIds = new Set(targetTileIds);
+      isMoveMode = false;
+      isPhysicalTargetMode = true;
+      isBlinkTargetMode = false;
+      pendingPhysicalDamage = Number.isFinite(artifact.effect.amount) ? artifact.effect.amount : 4;
+      pendingAttack = {
+        artifactInstanceId,
+        label: artifact.name,
+        damage: pendingPhysicalDamage,
+        defenseStat: "arcaneDefense",
+        damageType: "arcane",
+        targetTileIds,
+        consumeArtifactUse: true,
+        revealTarget: true,
+        prompt: `Choose a revealed enemy for ${artifact.name}.`,
+      };
+      roomStage.classList.remove("movement-active", "dragging");
+      updateRoom();
+      roomStatus.textContent = `All enemies revealed. Choose one for ${artifact.name}.`;
+      return;
+    }
+
+    if (artifact.effect?.type === "shieldDamage") {
+      character.damageShieldTurns = Math.max(character.damageShieldTurns || 0, artifact.effect.turns || 3);
+      consumeArtifactUse(artifact);
+      updateRoom();
+      roomStatus.textContent = `${artifact.name} blocks all damage for ${character.damageShieldTurns} turns.`;
+      return;
+    }
+
+    if (artifact.effect?.type === "moveActionRangeBonus") {
+      character.moveActionRangeBonusAmount = Math.max(character.moveActionRangeBonusAmount || 0, artifact.effect.amount || 1);
+      character.moveActionRangeBonusTurns = Math.max(character.moveActionRangeBonusTurns || 0, artifact.effect.turns || 5);
+      consumeArtifactUse(artifact);
+      updateRoom();
+      roomStatus.textContent = `${artifact.name} adds ${character.moveActionRangeBonusAmount} space to each Move action for ${character.moveActionRangeBonusTurns} turns.`;
+      return;
+    }
+
     if (artifact.effect?.type === "damageAdjacentAll") {
       const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, getPlayerWallEdges());
 
@@ -4720,16 +5308,18 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       }
 
       const amount = Number.isFinite(artifact.effect.amount) ? artifact.effect.amount : 1;
+      const damageType = artifact.effect.damageType === "physical" ? "physical" : "arcane";
+      const defenseStat = damageType === "physical" ? "physicalDefense" : "arcaneDefense";
       const damagedEnemies = adjacentEnemyTileIds
         .map((tileId) => getEnemyAtTile(activeEnemies, tileId))
         .filter(Boolean)
-        .map((enemy) => ({ enemy, tileId: enemy.positionId, result: dealEnemyIntegrityDamage(enemy, amount) }));
+        .map((enemy) => ({ enemy, tileId: enemy.positionId, result: dealEnemyIntegrityDamage(enemy, amount, defenseStat) }));
       const didLevelUp = damagedEnemies.some((item) => item.result.didLevelUp);
 
       consumeArtifactUse(artifact);
       updateRoom();
       damagedEnemies.forEach((item) => showDamageIndicator(item.tileId, item.result.dealtDamage, "enemy"));
-      roomStatus.textContent = `${artifact.name} dealt ${amount} damage to ${damagedEnemies.length} surrounding ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`;
+      roomStatus.textContent = `${artifact.name} dealt ${amount} ${damageType} damage to ${damagedEnemies.length} surrounding ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`;
       finishRunecastingIfNoOptions(roomStatus.textContent);
       if (didLevelUp) {
         window.setTimeout(showImmediateLevelReward, 120);
@@ -4756,8 +5346,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         artifactInstanceId,
         label: artifact.name,
         damage: pendingPhysicalDamage,
-        defenseStat: "artifactDefense",
-        damageType: "artifact",
+        defenseStat: artifact.effect.damageType === "arcane" ? "arcaneDefense" : "physicalDefense",
+        damageType: artifact.effect.damageType === "arcane" ? "arcane" : "physical",
         targetTileIds: adjacentEnemyTileIds,
         consumeArtifactUse: true,
       };
@@ -4962,8 +5552,95 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     bindOverlay();
   }
 
+  function showRoomCraftingOverlay() {
+    character.sigilInventory = character.sigilInventory || [];
+    character.pipInventory = character.pipInventory || [];
+    let selectedCraftSource = null;
+    const overlay = document.createElement("div");
+    overlay.className = "cache-upgrade-overlay room-crafting-overlay";
+
+    function renderOverlay() {
+      overlay.innerHTML = `
+        <section class="cache-upgrade-panel room-crafting-panel" aria-labelledby="room-crafting-title">
+          <p class="signal">Dice Workbench</p>
+          <h2 id="room-crafting-title">Craft Dice</h2>
+          <div id="room-crafting-workbench">
+            ${renderCraftingDatabank(character, selectedCraftSource)}
+            ${renderCraftingDice(character, selectedCraftSource)}
+          </div>
+          <button class="primary-action" type="button" id="finish-room-crafting">Done Crafting</button>
+        </section>
+      `;
+    }
+
+    function bindOverlay() {
+      const workbench = overlay.querySelector("#room-crafting-workbench");
+
+      bindCraftingWorkbench({
+        workbench,
+        character,
+        getSelectedCraftSource: () => selectedCraftSource,
+        setSelectedCraftSource: (source) => {
+          selectedCraftSource = source;
+        },
+        renderWorkbench: () => {
+          renderOverlay();
+          bindOverlay();
+        },
+      });
+
+      overlay.querySelector("#finish-room-crafting").addEventListener("click", () => {
+        overlay.remove();
+        updateProgramAvailability();
+        updateRoom({ centerCamera: false });
+        roomStatus.textContent = "Dice crafting updated.";
+        gameLog("room.craftingComplete", getRoomDebugState());
+      });
+    }
+
+    renderOverlay();
+    document.querySelector(".room-screen").appendChild(overlay);
+    bindOverlay();
+  }
+
+  function spendUtilityAction(actionName) {
+    if (
+      turnPhase !== "player" ||
+      isLevelComplete ||
+      isRunDefeated ||
+      isRunecastingActive ||
+      pendingAttack ||
+      isBlinkTargetMode ||
+      actionPointsRemaining <= 0
+    ) {
+      roomStatus.textContent = `${actionName} needs 1 available Action.`;
+      return false;
+    }
+
+    actionPointsRemaining = Math.max(0, actionPointsRemaining - 1);
+    isMoveMode = false;
+    isPhysicalTargetMode = false;
+    pendingPhysicalDamage = 0;
+    pendingSymbolAssignment = null;
+    roomStage.classList.remove("movement-active", "dragging");
+    updateRoom({ centerCamera: false });
+    return true;
+  }
+
   changeProgramsButton.addEventListener("click", () => {
+    if (!spendUtilityAction("Programs")) {
+      return;
+    }
+
     showProgramLibraryEquip("Choose equipped programs.");
+  });
+
+  roomCraftingButton.addEventListener("click", () => {
+    if (!spendUtilityAction("Crafting")) {
+      return;
+    }
+
+    showRoomCraftingOverlay();
   });
 
   saveGameButton.addEventListener("click", () => {
@@ -5120,6 +5797,23 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     updateRoom();
   }
 
+  function exhaustRunecastingKeepResults(statusText = "") {
+    isRunecastingActive = false;
+    isPhysicalTargetMode = false;
+    isBlinkTargetMode = false;
+    pendingPhysicalDamage = 0;
+    pendingAttack = null;
+    pendingSymbolAssignment = null;
+    isRolling = false;
+    selectedRollSlots.length = 0;
+    updateProgramAvailability();
+    updateRunecastingPanel();
+    updateRoom();
+    if (statusText) {
+      roomStatus.textContent = statusText;
+    }
+  }
+
   function activateRunecasting() {
     if (turnPhase !== "player") {
       return;
@@ -5154,6 +5848,127 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     return Array.isArray(currentCastSymbols)
       ? [...currentCastSymbols, ...getAvailableSigilGlyphSymbols(character)]
       : currentCastSymbols;
+  }
+
+  function getLinePathTileIds(positionId, direction, maxDistance) {
+    const position = roomTiles.find((tile) => tile.id === positionId);
+    const path = [];
+
+    if (!position) {
+      return path;
+    }
+
+    for (let distance = 1; distance <= maxDistance; distance += 1) {
+      const tile = roomTiles.find(
+        (candidate) =>
+          candidate.q === position.q + direction.q * distance &&
+          candidate.r === position.r + direction.r * distance
+      );
+
+      if (!tile) {
+        break;
+      }
+
+      const previousTile = distance === 1 ? position : roomTiles.find((candidate) => candidate.id === path[path.length - 1]);
+      if (hasWallBetweenTiles(getPlayerWallEdges(), previousTile, tile)) {
+        break;
+      }
+
+      path.push(tile.id);
+    }
+
+    return path;
+  }
+
+  function getLineFalloffTargetTileIds(maxDistance) {
+    return roomDirections.flatMap((direction) => getLinePathTileIds(characterPositionId, direction, maxDistance));
+  }
+
+  function getLinePathToTile(targetTileId, maxDistance) {
+    return roomDirections
+      .map((direction) => getLinePathTileIds(characterPositionId, direction, maxDistance))
+      .find((path) => path.includes(targetTileId)) || [];
+  }
+
+  function showManifestDieFacePicker(program, allocatedSymbols) {
+    const overlay = document.createElement("div");
+    const allocatedSlotIndices = new Set(allocatedSymbols.map((symbol) => symbol.slotIndex));
+    const manifestableSymbols = currentCastSymbols.filter((symbol) => !symbol.artifactInstanceId && !symbol.spent && !allocatedSlotIndices.has(symbol.slotIndex));
+
+    if (!manifestableSymbols.length) {
+      roomStatus.textContent = `${program.name} has no other die result to change.`;
+      return;
+    }
+
+    overlay.className = "cache-upgrade-overlay manifest-overlay";
+    overlay.innerHTML = `
+      <section class="cache-upgrade-panel" aria-labelledby="manifest-title">
+        <p class="signal">Sigil-Casting Override</p>
+        <h2 id="manifest-title">${program.name}</h2>
+        <p>Choose a rolled die, then choose the face it shows for this Sigil-Cast.</p>
+        <div class="cache-upgrade-grid manifest-grid">
+          ${manifestableSymbols
+            .map((symbol) => {
+              const loadoutDie = character.loadout[symbol.slotIndex];
+              const faces = getLoadoutDieRawFaces(loadoutDie);
+
+              return `
+                <article class="reward-card manifest-die-card">
+                  <h3>Die ${symbol.slotIndex + 1}</h3>
+                  <div class="reward-choice-grid">
+                    ${faces
+                      .map((face, faceIndex) => {
+                        const sigil = face.element ? getSigilDefinition(face.element, face.face || 1) : null;
+
+                        return `
+                          <button class="secondary-action reward-choice manifest-face-choice" type="button" data-manifest-slot="${symbol.slotIndex}" data-manifest-face="${faceIndex}">
+                            <strong>${sigil ? `${sigil.name} ${sigilRarityLabels[sigil.face]}` : "Blank"}</strong>
+                            <small>Face ${faceIndex + 1}</small>
+                          </button>
+                        `;
+                      })
+                      .join("")}
+                  </div>
+                </article>
+              `;
+            })
+            .join("")}
+        </div>
+      </section>
+    `;
+
+    document.querySelector(".room-screen").appendChild(overlay);
+    overlay.addEventListener("click", (event) => {
+      const choice = event.target.closest("[data-manifest-slot]");
+
+      if (!choice) {
+        return;
+      }
+
+      const slotIndex = Number(choice.dataset.manifestSlot);
+      const faceIndex = Number(choice.dataset.manifestFace);
+      const rawFace = getLoadoutDieRawFaces(character.loadout[slotIndex])[faceIndex] || null;
+      const sigil = rawFace?.element ? getSigilDefinition(rawFace.element, rawFace.face || 1) : null;
+
+      currentCastSymbols = currentCastSymbols.map((symbol) =>
+        symbol.slotIndex === slotIndex
+          ? {
+              ...symbol,
+              element: sigil?.element || null,
+              face: sigil?.face || null,
+              faceIndex,
+              pips: rawFace?.pips || [],
+              blank: !sigil,
+            }
+          : symbol
+      );
+      overlay.remove();
+      updateProgramAvailability();
+      updateRunecastingPanel();
+      updateRoom();
+      roomStatus.textContent = `${program.name} set Die ${slotIndex + 1} to ${sigil ? `${sigil.name} ${sigilRarityLabels[sigil.face]}` : "Blank"}.`;
+      finishRunecastingIfNoOptions(roomStatus.textContent);
+    });
   }
 
   rollButton.addEventListener("click", () => {
@@ -5446,6 +6261,162 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         return;
       }
 
+      if (effect.type === "temporaryExecBoost") {
+        const amount = Number.isFinite(effect.amount) ? effect.amount : 1;
+        const turns = Number.isFinite(effect.turns) ? effect.turns : 4;
+        markProgramAllocated(programId, program, allocatedSymbols);
+        executionRollsRemaining += amount;
+        character.temporaryExecutionBoostAmount = Math.max(character.temporaryExecutionBoostAmount || 0, amount);
+        character.temporaryExecutionBoostTurns = Math.max(character.temporaryExecutionBoostTurns || 0, turns);
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
+        roomStatus.textContent = `${program.name} adds ${amount} Execution now and for the next ${turns} turns.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        gameLog("program.temporaryExecBoostResolved", { programId, amount, turns, state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "invertIncomingDamage") {
+        const charges = Number.isFinite(effect.charges) ? effect.charges : 2;
+        markProgramAllocated(programId, program, allocatedSymbols);
+        character.damageInversionCharges = Math.max(character.damageInversionCharges || 0, charges);
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        roomStatus.textContent = `${program.name} will convert the next ${charges} damaging ${charges === 1 ? "attack" : "attacks"} into healing.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        gameLog("program.damageInversionResolved", { programId, charges, state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "stunAllEnemies") {
+        const duration = Number.isFinite(effect.duration) ? effect.duration : 1;
+        const livingEnemies = getLivingEnemies();
+        markProgramAllocated(programId, program, allocatedSymbols);
+        livingEnemies.forEach((enemy) => {
+          enemy.stunnedTurns = Math.max(enemy.stunnedTurns || 0, duration);
+        });
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        roomStatus.textContent = `${program.name} stunned ${livingEnemies.length} ${livingEnemies.length === 1 ? "enemy" : "enemies"} for the next enemy turn.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        gameLog("program.stunAllResolved", { programId, enemyIds: livingEnemies.map((enemy) => enemy.instanceId), state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "implodeVisible") {
+        const visibleTileIds = new Set(getVisibleTileIds(roomTiles, characterPositionId));
+        const targetEnemies = getLivingEnemies().filter((enemy) => visibleTileIds.has(enemy.positionId));
+
+        if (!targetEnemies.length) {
+          updateProgramAvailability();
+          updateRunecastingPanel();
+          updateRoom();
+          roomStatus.textContent = `${program.name} found no enemies in view.`;
+          return;
+        }
+
+        markProgramAllocated(programId, program, allocatedSymbols);
+        const damageResults = resolveMultiEnemyProgramDamage(
+          targetEnemies,
+          (enemy) => enemy.stats.physicalDefense || 0,
+          "physicalDefense",
+          { ignoreDefense: true }
+        );
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        damageResults.forEach((result) => showDamageIndicator(result.tileId, result.dealtDamage, "enemy"));
+        roomStatus.textContent = `${program.name} damaged ${damageResults.length} visible ${damageResults.length === 1 ? "enemy" : "enemies"}.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        if (damageResults.some((result) => result.didLevelUp)) {
+          window.setTimeout(showImmediateLevelReward, 120);
+        }
+        if (damageResults.some((result) => result.didDefeat) && !hasLivingEnemies()) {
+          window.setTimeout(showAllDerezzedNotice, 160);
+        }
+        gameLog("program.implodeResolved", { programId, damageResults, state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "blinkAnywhere") {
+        const targetTileIds = roomTiles
+          .filter((tile) => tile.id !== characterPositionId && !getOccupiedEnemyTileIds(activeEnemies).includes(tile.id))
+          .map((tile) => tile.id);
+
+        if (!targetTileIds.length) {
+          updateProgramAvailability();
+          updateRunecastingPanel();
+          updateRoom();
+          roomStatus.textContent = `${program.name} has no open hex to target.`;
+          return;
+        }
+
+        markProgramAllocated(programId, program, allocatedSymbols);
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = true;
+        pendingBlinkTargetTileIds = targetTileIds;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        roomStatus.textContent = `Choose any unoccupied hex for ${program.name}.`;
+        gameLog("program.blinkAnywhereTargeting", { programId, targetCount: targetTileIds.length, state: getRoomDebugState() });
+        return;
+      }
+
+      if (effect.type === "manifestDieFace") {
+        markProgramAllocated(programId, program, allocatedSymbols);
+        isMoveMode = false;
+        isPhysicalTargetMode = false;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        showManifestDieFacePicker(program, allocatedSymbols);
+        gameLog("program.manifestPickerOpened", { programId, state: getRoomDebugState() });
+        return;
+      }
+
       if (effect.type === "entangleAdjacent") {
         const adjacentEnemyTileIds = getAdjacentEnemyTileIds(roomTiles, activeEnemies, characterPositionId, playerWallEdges);
 
@@ -5560,7 +6531,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
           return;
         }
 
-        const selfDamage = Number.isFinite(effect.selfDamage) ? effect.selfDamage : 0;
+        const rawSelfDamage = Number.isFinite(effect.selfDamage) ? effect.selfDamage : 0;
+        const selfDamage = character.damageShieldTurns > 0 ? 0 : rawSelfDamage;
         const rawDamage = Number.isFinite(effect.amount) ? effect.amount : 1;
         const defense = effect.damageType === "arcane" ? "arcaneDefense" : "physicalDefense";
         const damagedEnemies = adjacentEnemyTileIds
@@ -5586,7 +6558,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
           showDamageIndicator(characterPositionId, selfDamage, "player");
         }
         damagedEnemies.forEach((item) => showDamageIndicator(item.tileId, item.result.dealtDamage, "enemy"));
-        roomStatus.textContent = selfDamage > 0
+        roomStatus.textContent = rawSelfDamage > 0 && character.damageShieldTurns > 0
+          ? `${program.name} self-damage was blocked by Mag Shield and hit ${damagedEnemies.length} adjacent ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`
+          : selfDamage > 0
           ? `${program.name} cost ${selfDamage} Integrity and hit ${damagedEnemies.length} adjacent ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`
           : `${program.name} hit ${damagedEnemies.length} adjacent ${damagedEnemies.length === 1 ? "enemy" : "enemies"}.`;
         finishRunecastingIfNoOptions(roomStatus.textContent);
@@ -5671,6 +6645,42 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
           duration: Number.isFinite(effect.duration) ? effect.duration : 1,
           targetTileIds: adjacentEnemyTileIds,
           prompt: `Choose an adjacent enemy to confuse for its next turn.`,
+        };
+        roomStage.classList.remove("movement-active", "dragging");
+        updateProgramAvailability();
+        updateRunecastingPanel();
+        updateRoom();
+        return;
+      }
+
+      if (effect.type === "damageLineFalloff") {
+        const maxDistance = Number.isFinite(effect.distance) ? effect.distance : 4;
+        const targetTileIds = getLineFalloffTargetTileIds(maxDistance);
+
+        if (!targetTileIds.length) {
+          updateProgramAvailability();
+          updateRunecastingPanel();
+          updateRoom();
+          roomStatus.textContent = `${program.name} has no valid straight-line target.`;
+          return;
+        }
+
+        markProgramAllocated(programId, program, allocatedSymbols);
+        isMoveMode = false;
+        isPhysicalTargetMode = true;
+        isBlinkTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = {
+          programId,
+          label: program.name,
+          effectType: "damageLineFalloff",
+          targetTileIds,
+          damageType: effect.damageType === "physical" ? "physical" : "arcane",
+          defenseStat: effect.damageType === "physical" ? "physicalDefense" : "arcaneDefense",
+          damages: Array.isArray(effect.damages) ? effect.damages : [8, 6, 4, 2],
+          distance: maxDistance,
+          allowEmptyTarget: true,
+          prompt: `Choose a hex in a straight line up to ${maxDistance} spaces away.`,
         };
         roomStage.classList.remove("movement-active", "dragging");
         updateProgramAvailability();
@@ -5913,7 +6923,26 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       }
     }
 
-    if (!canCastProgram(program, getCastSymbolsWithGlyphs(), cooldownLockedProgramIds)) {
+    if (effect.type === "implodeVisible") {
+      const visibleTileIds = new Set(getVisibleTileIds(roomTiles, characterPositionId));
+
+      if (!getLivingEnemies().some((enemy) => visibleTileIds.has(enemy.positionId))) {
+        roomStatus.textContent = `${program.name} found no enemies in view.`;
+        return;
+      }
+    }
+
+    if (effect.type === "damageLineFalloff" && !getLineFalloffTargetTileIds(Number.isFinite(effect.distance) ? effect.distance : 4).length) {
+      roomStatus.textContent = `${program.name} has no valid straight-line target.`;
+      return;
+    }
+
+    if (effect.type === "blinkAnywhere" && !roomTiles.some((tile) => tile.id !== characterPositionId && !getOccupiedEnemyTileIds(activeEnemies).includes(tile.id))) {
+      roomStatus.textContent = `${program.name} has no open hex to target.`;
+      return;
+    }
+
+    if (!canCastProgram(program, getCastSymbolsWithGlyphs(), getLockedProgramIds())) {
       roomStatus.textContent = `${program.name} requires additional sigils.`;
       return;
     }
@@ -6025,6 +7054,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       const disruptedResultIndex = Math.floor(Math.random() * finalResults.length);
       finalResults[disruptedResultIndex] = rollDie(character.loadout[slotsToRoll[disruptedResultIndex]]);
     }
+    const pipCycleReward = getRollPipCycleReward(finalResults);
+    const pipExecutionBonus = getRollPipExecutionBonus(finalResults);
     let ticks = 0;
     const rollTimer = window.setInterval(() => {
       ticks += 1;
@@ -6052,6 +7083,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
               element: finalResults[rolledSlotIndex]?.sigil?.element || null,
               face: finalResults[rolledSlotIndex]?.sigil?.face || null,
               faceIndex: finalResults[rolledSlotIndex]?.faceIndex ?? null,
+              pips: finalResults[rolledSlotIndex]?.pips || [],
               blank: !finalResults[rolledSlotIndex]?.sigil,
             };
           });
@@ -6060,13 +7092,29 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
           allocatedProgramSymbols = {};
         }
         selectedRollSlots.length = 0;
+        if (pipCycleReward > 0) {
+          character.cycles += pipCycleReward;
+          document.querySelector(".cycle-panel").outerHTML = renderCyclePanel(
+            character.cycles,
+            getLevelCycleReward(turnNumber, levelCycleMaxTurns),
+            turnNumber,
+            levelCycleMaxTurns
+          );
+        }
+        if (pipExecutionBonus > 0) {
+          executionRollsRemaining += pipExecutionBonus;
+        }
 
         if (!hasUsableCastSymbols()) {
           const noUsableStatus =
             executionRollsRemaining > 0
               ? "No usable sigils rolled. Select blank dice to reroll with remaining Executions."
               : "No usable sigils rolled. Executions spent for this Sigil-Cast.";
-          roomStatus.textContent = noUsableStatus;
+          const pipStatus = [
+            pipCycleReward > 0 ? `Cycles Pip gained +${pipCycleReward} Cycles.` : "",
+            pipExecutionBonus > 0 ? `Arcane Pip added +${pipExecutionBonus} Execution${pipExecutionBonus === 1 ? "" : "s"}.` : "",
+          ].filter(Boolean).join(" ");
+          roomStatus.textContent = pipStatus ? `${noUsableStatus} ${pipStatus}` : noUsableStatus;
           gameLog("sigilCast.noUsableSymbols", {
             selectedRollSlots: [...slotsToRoll],
             finalResults,
@@ -6074,15 +7122,28 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
             executionRollsRemaining,
             state: getRoomDebugState(),
           });
-          finishRunecastingIfNoOptions(noUsableStatus);
+          if (executionRollsRemaining <= 0) {
+            exhaustRunecastingKeepResults(noUsableStatus);
+          }
         }
 
         updateProgramAvailability();
         updateRunecastingPanel(finalResults);
+        if (pipCycleReward > 0) {
+          showCyclePipIndicators(finalResults, slotsToRoll);
+        }
         rollStatus.textContent = getExecutionStatusText(executionRollsRemaining);
+        if ((pipCycleReward > 0 || pipExecutionBonus > 0) && hasUsableCastSymbols()) {
+          roomStatus.textContent = [
+            pipCycleReward > 0 ? `Cycles Pip gained +${pipCycleReward} Cycles.` : "",
+            pipExecutionBonus > 0 ? `Arcane Pip added +${pipExecutionBonus} Execution${pipExecutionBonus === 1 ? "" : "s"}.` : "",
+          ].filter(Boolean).join(" ");
+        }
         gameLog("sigilCast.roll.complete", {
           selectedRollSlots: [...slotsToRoll],
           finalResults,
+          pipCycleReward,
+          pipExecutionBonus,
           isReroll: hasRollResults,
           disruptedBy: disruptiveEnemy?.instanceId || null,
           state: getRoomDebugState(),
@@ -6141,7 +7202,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         return;
       }
 
-      if (!targetEnemy && pendingAttack.allowEmptyTarget) {
+      if (!targetEnemy && pendingAttack.allowEmptyTarget && pendingAttack.effectType !== "damageLineFalloff") {
         const revealStatus = `${pendingAttack.label} revealed the target space, but hit no enemy.`;
         isPhysicalTargetMode = false;
         pendingPhysicalDamage = 0;
@@ -6232,6 +7293,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         targetEnemy.confusedTurns = 0;
         targetEnemy.stunnedTurns = 0;
         targetEnemy.accuracySuppressedTurns = 0;
+        targetEnemy.proximityAttackedThisTurn = false;
         characterPositionId = tileId;
         exploredTileIds.add(tileId);
         isPhysicalTargetMode = false;
@@ -6264,6 +7326,40 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         return;
       }
 
+      if (pendingAttack.effectType === "damageLineFalloff") {
+        const pathTileIds = getLinePathToTile(tileId, pendingAttack.distance || 4);
+        const damageResults = pathTileIds
+          .map((pathTileId, index) => {
+            const enemy = getEnemyAtTile(activeEnemies, pathTileId);
+
+            return enemy
+              ? resolveProgramEnemyDamage(enemy, pendingAttack.damages[index] || 0, pendingAttack.defenseStat)
+              : null;
+          })
+          .filter(Boolean);
+        const damageLabel = pendingAttack.label;
+        const damageType = pendingAttack.damageType;
+
+        isPhysicalTargetMode = false;
+        pendingPhysicalDamage = 0;
+        pendingAttack = null;
+        pendingSymbolAssignment = null;
+        updateRoom();
+        damageResults.forEach((result) => showDamageIndicator(result.tileId, result.dealtDamage, "enemy"));
+        roomStatus.textContent = damageResults.length
+          ? `${damageLabel} hit ${damageResults.length} ${damageResults.length === 1 ? "enemy" : "enemies"} with ${damageType} falloff damage.`
+          : `${damageLabel} fired down the line but hit no enemies.`;
+        finishRunecastingIfNoOptions(roomStatus.textContent);
+        if (damageResults.some((result) => result.didLevelUp)) {
+          window.setTimeout(showImmediateLevelReward, 120);
+        }
+        if (damageResults.some((result) => result.didDefeat) && !hasLivingEnemies()) {
+          window.setTimeout(showAllDerezzedNotice, 160);
+        }
+        gameLog("program.damageLineFalloffResolved", { damageLabel, targetTileId: tileId, damageResults, state: getRoomDebugState() });
+        return;
+      }
+
       const dealtDamage = Math.max(0, pendingAttack.damage - (targetEnemy.stats[pendingAttack.defenseStat] || 0));
       const enemyIntegrityBeforeDamage = targetEnemy.stats.integrity;
       targetEnemy.stats.integrity = Math.max(0, targetEnemy.stats.integrity - dealtDamage);
@@ -6287,6 +7383,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         maybeDropCycles(defeatedTileId, targetEnemy);
         targetEnemy.positionId = null;
         targetEnemy.stunnedTurns = 0;
+        targetEnemy.proximityAttackedThisTurn = false;
         damageStatus = `${damageLabel} dealt ${dealtDamage} ${damageType} damage. ${targetEnemy.name} derezzed. +${targetEnemy.xpValue} XP.`;
         if (didLevelUp) {
           damageStatus += ` Level ${character.progression.level} reached.`;
@@ -6332,7 +7429,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     }
 
     const tileId = tileButton.dataset.tileId;
-    const movementRange = isRoomSecured() ? roomTiles.length : actionPointsRemaining;
+    const movementRange = actionPointsRemaining * getMoveActionStepValue();
     const occupiedEnemyTileIds = getOccupiedEnemyTileIds(activeEnemies);
 
     if (occupiedEnemyTileIds.includes(tileId)) {
@@ -6361,18 +7458,14 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
     const previousCharacterRect = captureCharacterTokenRect();
     characterPositionId = tileId;
-    if (!isRoomSecured()) {
-      actionPointsRemaining = Math.max(0, actionPointsRemaining - movementPath.length);
-      isMoveMode = false;
-    } else {
-      isMoveMode = true;
-    }
+    actionPointsRemaining = Math.max(0, actionPointsRemaining - Math.ceil(movementPath.length / getMoveActionStepValue()));
+    isMoveMode = false;
     suppressTileClick = false;
     isBlinkTargetMode = false;
     roomStage.classList.toggle("movement-active", isMoveMode);
     roomStage.classList.remove("dragging");
     updateRoom({ centerCamera: false });
-    await animateCharacterMovement(previousCharacterRect);
+    await animateCharacterMovement(previousCharacterRect, movementPath);
     centerCameraOnTile(characterPositionId);
     updateCamera();
     const entryStatus = resolvePlayerTileEntry();
@@ -6404,9 +7497,9 @@ function renderCraftedDieFaces(customFaces, selectedElement = "") {
     const die = sigil ? getDieById(sigil.element) : null;
 
     return `
-      <button class="craft-face ${sigil ? "filled" : "empty"}" type="button" data-face-index="${index}" style="--die-accent: ${die?.accent || "#f6f8ff"}" aria-label="Die face ${index + 1}">
+      <button class="craft-face ${sigil ? "filled" : "empty"} ${sigil?.preset ? "preset" : ""}" type="button" data-face-index="${index}" style="--die-accent: ${die?.accent || "#f6f8ff"}" aria-label="Die face ${index + 1}">
         ${sigil ? `<img src="${die.files[sigil.face || 1]}" alt="${die.name} common sigil">` : `<span>${selectedElement ? "Drop" : "Empty"}</span>`}
-        <small>${index + 1}</small>
+        <small>${sigil?.preset ? "Preset" : index + 1}</small>
       </button>
     `;
   }).join("");
@@ -6462,8 +7555,35 @@ function renderCraftingSigilToken(sigil, attributes = "") {
   `;
 }
 
+function renderPipMarker(pip, attributes = "") {
+  const definition = getPipDefinition(pip?.type);
+
+  if (!definition) {
+    return "";
+  }
+
+  return `<span class="pip-marker ${definition.className}" title="${definition.label}" aria-label="${definition.name}" ${attributes}></span>`;
+}
+
+function renderPipToken(pip, attributes = "") {
+  const definition = getPipDefinition(pip?.type);
+
+  if (!definition) {
+    return `<span class="crafting-empty-label">Empty</span>`;
+  }
+
+  return `
+    <span class="crafting-pip-token" ${attributes}>
+      ${renderPipMarker(pip)}
+      <span>${definition.name}</span>
+      <small>${definition.label}</small>
+    </span>
+  `;
+}
+
 function renderCraftingDatabank(character, selectedCraftSource = null) {
   const inventory = character.sigilInventory || [];
+  const pipInventory = character.pipInventory || [];
 
   return `
     <section class="crafting-databank" aria-labelledby="crafting-databank-title" data-crafting-inventory-target="true">
@@ -6487,6 +7607,26 @@ function renderCraftingDatabank(character, selectedCraftSource = null) {
             : `<p class="crafting-empty-bank">No loose sigils stored.</p>`
         }
       </div>
+      <div class="section-heading pip-heading">
+        <h3>Pips</h3>
+      </div>
+      <div class="crafting-inventory-grid pip-inventory-grid" data-crafting-pip-inventory-target="true">
+        ${
+          pipInventory.length
+            ? pipInventory
+                .map((pip, index) => {
+                  const isSelected = selectedCraftSource?.type === "pipInventory" && selectedCraftSource.index === index;
+
+                  return `
+                    <button class="crafting-inventory-sigil crafting-inventory-pip ${isSelected ? "selected" : ""}" type="button" draggable="true" data-crafting-source="pipInventory" data-pip-index="${index}" aria-pressed="${isSelected}">
+                      ${renderPipToken(pip)}
+                    </button>
+                  `;
+                })
+                .join("")
+            : `<p class="crafting-empty-bank">No loose pips stored.</p>`
+        }
+      </div>
     </section>
   `;
 }
@@ -6502,6 +7642,7 @@ function renderCraftingDice(character, selectedCraftSource = null) {
           .map((loadoutDie, dieIndex) => {
             const isCustom = typeof loadoutDie !== "string" && loadoutDie?.type === "custom";
             const faces = getLoadoutDieFaces(loadoutDie);
+            const rawFaces = getLoadoutDieRawFaces(loadoutDie);
 
             return `
               <article class="crafting-die-card ${isCustom ? "" : "locked"}">
@@ -6513,13 +7654,21 @@ function renderCraftingDice(character, selectedCraftSource = null) {
                   ${faces
                     .map((sigil, faceIndex) => {
                       const die = sigil ? getDieById(sigil.element) : null;
+                      const facePip = rawFaces[faceIndex]?.pips?.[0] || null;
                       const isSelected =
                         selectedCraftSource?.type === "face" &&
+                        selectedCraftSource.dieIndex === dieIndex &&
+                        selectedCraftSource.faceIndex === faceIndex;
+                      const isPipSelected =
+                        selectedCraftSource?.type === "facePip" &&
                         selectedCraftSource.dieIndex === dieIndex &&
                         selectedCraftSource.faceIndex === faceIndex;
 
                       return `
                         <button class="craft-face crafting-face ${sigil ? "filled" : "empty"} ${isSelected ? "selected" : ""}" type="button" ${isCustom ? `draggable="${sigil ? "true" : "false"}" data-crafting-target="face" data-crafting-source="${sigil ? "face" : ""}" data-die-index="${dieIndex}" data-face-index="${faceIndex}"` : "disabled"} style="--die-accent: ${die?.accent || "#f6f8ff"}" aria-label="Die ${dieIndex + 1} face ${faceIndex + 1}">
+                          <span class="crafting-face-pip-slot ${facePip ? "filled" : ""} ${isPipSelected ? "selected" : ""}" ${isCustom ? `draggable="${facePip ? "true" : "false"}" data-crafting-target="facePip" data-crafting-source="${facePip ? "facePip" : ""}" data-die-index="${dieIndex}" data-face-index="${faceIndex}"` : ""}>
+                            ${facePip ? renderPipMarker(facePip) : ""}
+                          </span>
                           ${sigil ? `<img src="${die.files[sigil.face || 1]}" alt="${die.name} sigil">` : `<span>Empty</span>`}
                           <small>${faceIndex + 1}</small>
                         </button>
@@ -6553,6 +7702,24 @@ function getCraftingSigilSource(character, source) {
   return null;
 }
 
+function getCraftingPipSource(character, source) {
+  if (!source) {
+    return null;
+  }
+
+  if (source.type === "pipInventory") {
+    return character.pipInventory?.[source.index] || null;
+  }
+
+  if (source.type === "facePip") {
+    const loadoutDie = character.loadout?.[source.dieIndex];
+    const face = loadoutDie?.type === "custom" ? loadoutDie.faces?.[source.faceIndex] || null : null;
+    return face?.pips?.[0] || null;
+  }
+
+  return null;
+}
+
 function setCraftingSigilSource(character, source, sigil) {
   if (source.type === "inventory") {
     character.sigilInventory = character.sigilInventory || [];
@@ -6578,7 +7745,49 @@ function setCraftingSigilSource(character, source, sigil) {
       return false;
     }
 
-    loadoutDie.faces[source.faceIndex] = sigil || null;
+    const existingPips = loadoutDie.faces[source.faceIndex]?.pips || [];
+    loadoutDie.faces[source.faceIndex] = sigil
+      ? { element: sigil.element, face: sigil.face || 1, ...(existingPips.length ? { pips: existingPips } : {}) }
+      : existingPips.length
+        ? { pips: existingPips }
+        : null;
+    return true;
+  }
+
+  return false;
+}
+
+function setCraftingPipSource(character, source, pip) {
+  if (source.type === "pipInventory") {
+    character.pipInventory = character.pipInventory || [];
+
+    if (pip) {
+      character.pipInventory[source.index] = pip;
+    } else {
+      character.pipInventory.splice(source.index, 1);
+    }
+
+    return true;
+  }
+
+  if (source.type === "facePip") {
+    const loadoutDie = character.loadout?.[source.dieIndex];
+
+    if (!loadoutDie || loadoutDie.type !== "custom") {
+      return false;
+    }
+
+    loadoutDie.faces = Array.from({ length: getCustomDieSideCount(loadoutDie) }, (_, index) => loadoutDie.faces?.[index] || null);
+    if (source.faceIndex < 0 || source.faceIndex >= loadoutDie.faces.length) {
+      return false;
+    }
+
+    const existingFace = loadoutDie.faces[source.faceIndex] || {};
+    loadoutDie.faces[source.faceIndex] = pip
+      ? { ...existingFace, pips: [pip] }
+      : existingFace.element
+        ? { element: existingFace.element, face: existingFace.face || 1 }
+        : null;
     return true;
   }
 
@@ -6614,9 +7823,64 @@ function moveCraftingSigil(character, source, target) {
   return true;
 }
 
+function moveCraftingPip(character, source, target) {
+  const sourcePip = getCraftingPipSource(character, source);
+
+  if (!sourcePip || !target || !["pipInventory", "facePip"].includes(target.type)) {
+    return false;
+  }
+
+  if (
+    source.type === target.type &&
+    source.index === target.index &&
+    source.dieIndex === target.dieIndex &&
+    source.faceIndex === target.faceIndex
+  ) {
+    return false;
+  }
+
+  if (target.type === "pipInventory") {
+    setCraftingPipSource(character, source, null);
+    character.pipInventory = character.pipInventory || [];
+    character.pipInventory.push(sourcePip);
+    return true;
+  }
+
+  const targetPip = getCraftingPipSource(character, target);
+  setCraftingPipSource(character, target, sourcePip);
+  setCraftingPipSource(character, source, targetPip || null);
+  return true;
+}
+
+function moveCraftingItem(character, source, target) {
+  if (source?.type === "pipInventory" || source?.type === "facePip") {
+    return moveCraftingPip(character, source, target);
+  }
+
+  if (!["inventory", "face"].includes(target?.type)) {
+    return false;
+  }
+
+  return moveCraftingSigil(character, source, target);
+}
+
 function getCraftingSourceFromElement(element) {
+  const pipInventorySource = element.closest("[data-crafting-source='pipInventory']");
+  const facePipSource = element.closest("[data-crafting-source='facePip']");
   const inventorySource = element.closest("[data-crafting-source='inventory']");
   const faceSource = element.closest("[data-crafting-source='face']");
+
+  if (pipInventorySource) {
+    return { type: "pipInventory", index: Number(pipInventorySource.dataset.pipIndex) };
+  }
+
+  if (facePipSource) {
+    return {
+      type: "facePip",
+      dieIndex: Number(facePipSource.dataset.dieIndex),
+      faceIndex: Number(facePipSource.dataset.faceIndex),
+    };
+  }
 
   if (inventorySource) {
     return { type: "inventory", index: Number(inventorySource.dataset.inventoryIndex) };
@@ -6634,7 +7898,16 @@ function getCraftingSourceFromElement(element) {
 }
 
 function getCraftingTargetFromElement(element) {
+  const facePipTarget = element.closest("[data-crafting-target='facePip']");
   const faceTarget = element.closest("[data-crafting-target='face']");
+
+  if (facePipTarget) {
+    return {
+      type: "facePip",
+      dieIndex: Number(facePipTarget.dataset.dieIndex),
+      faceIndex: Number(facePipTarget.dataset.faceIndex),
+    };
+  }
 
   if (faceTarget) {
     return {
@@ -6642,6 +7915,10 @@ function getCraftingTargetFromElement(element) {
       dieIndex: Number(faceTarget.dataset.dieIndex),
       faceIndex: Number(faceTarget.dataset.faceIndex),
     };
+  }
+
+  if (element.closest("[data-crafting-pip-inventory-target]")) {
+    return { type: "pipInventory" };
   }
 
   if (element.closest("[data-crafting-inventory-target]")) {
@@ -6679,7 +7956,7 @@ function bindCraftingWorkbench({ workbench, character, getSelectedCraftSource, s
     }
 
     if (selectedCraftSource && target) {
-      moveCraftingSigil(character, selectedCraftSource, target);
+      moveCraftingItem(character, selectedCraftSource, target);
       setSelectedCraftSource(null);
       renderWorkbench();
       return;
@@ -6718,7 +7995,7 @@ function bindCraftingWorkbench({ workbench, character, getSelectedCraftSource, s
 
     try {
       const source = JSON.parse(event.dataTransfer.getData("application/json"));
-      moveCraftingSigil(character, source, target);
+      moveCraftingItem(character, source, target);
       setSelectedCraftSource(null);
       renderWorkbench();
     } catch (error) {
@@ -6753,6 +8030,7 @@ function renderSelectedCharacterBio(selectedCharacterId) {
 function showLevelMap(character) {
   character.progression = character.progression || { ...startingProgression };
   character.sigilInventory = character.sigilInventory || [];
+  character.pipInventory = character.pipInventory || [];
   const mapState = ensureMapState(character);
   const selectedNode = mapState.selectedNode || startingMapState.selectedNode;
   const selectedLevelNode = levelNodes.find((node) => node.id === selectedNode) || levelNodes[0];
@@ -6848,6 +8126,8 @@ function showLevelMap(character) {
     const node = levelNodes.find((item) => item.id === nodeId) || levelNodes[0];
     const isUnlocked = mapState.unlockedNodes.includes(nodeId) || mapState.completedNodes.includes(nodeId);
     const isVisitedMarket = node.type === "market" && mapState.visitedMarkets.includes(nodeId);
+    const isCompletedLevel = node.type !== "market" && mapState.completedNodes.includes(nodeId);
+    const isUnavailable = isVisitedMarket || isCompletedLevel;
 
     if (!isUnlocked) {
       return;
@@ -6855,8 +8135,12 @@ function showLevelMap(character) {
 
     mapState.selectedNode = nodeId;
     levelNodeButtons.forEach((node) => node.classList.toggle("active", node.dataset.levelNode === nodeId));
-    enterLevel.disabled = isVisitedMarket;
-    enterLevel.textContent = isVisitedMarket ? `${node.label} Visited` : `Enter ${node.label}`;
+    enterLevel.disabled = isUnavailable;
+    enterLevel.textContent = isVisitedMarket
+      ? `${node.label} Visited`
+      : isCompletedLevel
+        ? `${node.label} Cleared`
+        : `Enter ${node.label}`;
     levelMapStatus.textContent = `${node.label} - Sigil Occurrence Percentages:`;
     levelSigilRatesSlot.innerHTML = renderSigilSpawnRates(node);
   }
@@ -6868,6 +8152,10 @@ function showLevelMap(character) {
   craftingButton.addEventListener("click", () => showSigilCraftingScreen(character));
   enterLevel.addEventListener("click", () => {
     const node = levelNodes.find((item) => item.id === mapState.selectedNode) || levelNodes[0];
+
+    if (mapState.completedNodes.includes(node.id)) {
+      return;
+    }
 
     if (node.type === "market") {
       if (mapState.visitedMarkets.includes(node.id)) {
@@ -6997,7 +8285,9 @@ function showMarket(character, node) {
         const sigil = artifact.sigil ? getSigilDefinition(artifact.sigil.element, artifact.sigil.face) : null;
         const rarityText = artifact.effect?.type === "sigilGlyph" && sigil
           ? `${sigilRarityLabels[artifact.sigil.face || 1]} ${sigil.name}`
-          : `${artifact.rarity || "common"} artifact`;
+          : artifact.type === "pip" || artifact.effect?.type === "pip"
+            ? `${artifact.rarity || "common"} crafting pip`
+            : `${artifact.rarity || "common"} artifact`;
 
         return `
           <article class="market-offer ${isPurchased ? "purchased" : ""}">
@@ -7140,7 +8430,7 @@ function getRewardProgramOptions(character) {
   const ownedPrograms = new Set(ensureProgramLibrary(character));
   const equippedElements = getCharacterLoadoutElements(character);
   const availablePrograms = Object.values(programs).filter(
-    (program) => equippedElements.has(program.element) && !ownedPrograms.has(program.id)
+    (program) => !ownedPrograms.has(program.id) && getProgramRequiredElements(program).some((element) => equippedElements.has(element))
   );
 
   return availablePrograms.sort(() => Math.random() - 0.5).slice(0, 3);
@@ -7228,7 +8518,7 @@ function showCharacterSetup() {
           <div class="loadout-header">
             <div>
               <h3 id="loadout-title">Craft Starting Die</h3>
-              <p>Drag or click 3 common elemental sigils onto the blank die. You can place up to 2 copies of the same element.</p>
+              <p>Your Sigilant presets one common sigil. Drag or click 2 more common elemental sigils onto the blank die. You can place up to 2 copies of one element.</p>
             </div>
           </div>
 
@@ -7238,7 +8528,7 @@ function showCharacterSetup() {
         </section>
 
         <footer class="setup-footer">
-          <p id="setup-status">Choose a Sigilant and craft 3 die faces to begin.</p>
+          <p id="setup-status">Choose a Sigilant to preset one sigil, then craft 2 more die faces.</p>
           <button class="primary-action" type="button" id="confirm-character" disabled>Enter Rift</button>
         </footer>
       </div>
@@ -7262,6 +8552,9 @@ function showCharacterSetup() {
     }
 
     const existingSigil = customFaces[targetIndex];
+    if (existingSigil?.preset) {
+      return false;
+    }
     const filledCount = getFilledFaceCount();
     const matchingCount = customFaces.filter((sigil, index) => index !== targetIndex && sigil?.element === element).length;
 
@@ -7277,6 +8570,49 @@ function showCharacterSetup() {
     customFaces[targetIndex] = { element, face: 1 };
     selectedCraftElement = "";
     updateSetupState();
+  }
+
+  function applyCharacterPreset(characterId) {
+    const selectedCharacter = characters.find((item) => item.id === characterId);
+
+    customFaces.forEach((sigil, index) => {
+      if (sigil?.preset) {
+        customFaces[index] = null;
+      }
+    });
+
+    if (!selectedCharacter?.startingDie) {
+      return;
+    }
+
+    const presetIndex = customFaces.findIndex((sigil) => !sigil);
+    customFaces[presetIndex >= 0 ? presetIndex : 0] = {
+      element: selectedCharacter.startingDie,
+      face: 1,
+      preset: true,
+    };
+
+    while (customFaces.filter((sigil) => sigil?.element === selectedCharacter.startingDie).length > 2) {
+      const removableIndex = customFaces.findLastIndex(
+        (sigil) => sigil?.element === selectedCharacter.startingDie && !sigil.preset
+      );
+
+      if (removableIndex < 0) {
+        break;
+      }
+
+      customFaces[removableIndex] = null;
+    }
+
+    while (getFilledFaceCount() > startingCustomFaceLimit) {
+      const removableIndex = customFaces.findLastIndex((sigil) => sigil && !sigil.preset);
+
+      if (removableIndex < 0) {
+        break;
+      }
+
+      customFaces[removableIndex] = null;
+    }
   }
 
   function updateSetupState() {
@@ -7296,7 +8632,7 @@ function showCharacterSetup() {
 
     status.textContent = filledCount === startingCustomFaceLimit
       ? "Custom die ready."
-      : `Assign ${startingCustomFaceLimit - filledCount} more ${startingCustomFaceLimit - filledCount === 1 ? "sigil" : "sigils"}.`;
+      : `${selectedCharacter.name} presets ${getDieById(selectedCharacter.startingDie)?.name || "one"} Sigil. Assign ${startingCustomFaceLimit - filledCount} more ${startingCustomFaceLimit - filledCount === 1 ? "sigil" : "sigils"}.`;
   }
 
   characterOptions.addEventListener("click", (event) => {
@@ -7307,6 +8643,7 @@ function showCharacterSetup() {
     }
 
     selectedCharacterId = card.dataset.characterId;
+    applyCharacterPreset(selectedCharacterId);
     updateSetupState();
   });
 
@@ -7328,6 +8665,11 @@ function showCharacterSetup() {
 
     if (selectedCraftElement) {
       placeSigil(selectedCraftElement, faceIndex);
+      return;
+    }
+
+    if (customFaces[faceIndex]?.preset) {
+      status.textContent = "The Sigilant preset cannot be removed.";
       return;
     }
 
