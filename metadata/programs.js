@@ -4,13 +4,13 @@
 // - damageLine: targets a hex distance spaces away in a straight line. Uses amount and damageType.
 // - damageRange: targets an enemy exactly distance spaces away by hex distance. Uses amount and damageType.
 // - debuffDefense: reduces Physical and Arcane Defense on an adjacent enemy by amount.
-// - damageAdjacentAll: loses selfDamage Integrity, then damages all adjacent enemies.
+// - damageAdjacentAll: loses selfDamage Integrity, then damages all adjacent enemies. Use damageEntries for multiple damage types.
 // - confuseEnemy: targets an adjacent enemy; next enemy turn it attacks another enemy instead of the player.
 // - resetOtherCooldowns: clears cooldowns on all other equipped programs.
 // - healIntegrity: restores Integrity by amount.
 // - blinkStraight: teleports exactly distance spaces in a straight line.
 // - nextTurnExec: adds amount temporary Executions to the next player turn. Optional currentAmount adds Executions immediately.
-// - revealRiftThreads: temporarily reveals Rift Thread hexes.
+// - revealRiftThreads: temporarily reveals Rift Thread hexes and can move them closer to the player.
 // - pushEnemy: targets an adjacent enemy, pushes it one hex away, and stuns it.
 // - sightRangeBonus: temporarily increases line of sight by amount.
 // - phaseThroughEnemies: allows movement paths through enemies for playerTurns player turns.
@@ -35,7 +35,7 @@ window.arcaneMetadata.programs = {
     requirement: [{ element: "void", face: 1 }],
     summary: "Move 3 spaces in a straight line.",
     details: "Teleport exactly 3 hex spaces in a single straight-line direction.",
-    cooldown: 0,
+    cooldown: 3,
     effect: {
       type: "blinkStraight",
       distance: 3,
@@ -87,13 +87,15 @@ window.arcaneMetadata.programs = {
       { element: "surge", face: 1 },
       { element: "life", face: 1 },
     ],
-    summary: "Deal 1 PD to all adjacent enemies.",
-    details: "Deal 1 Physical Damage to all adjacent enemies.",
+    summary: "Deal 1 PD and 1 AD adjacent.",
+    details: "Deal 1 Physical Damage and 1 Arcane Damage to all adjacent enemies.",
     cooldown: 2,
     effect: {
       type: "damageAdjacentAll",
-      amount: 1,
-      damageType: "physical",
+      damageEntries: [
+        { amount: 1, damageType: "physical" },
+        { amount: 1, damageType: "arcane" },
+      ],
     },
   },
   shatter: {
@@ -179,11 +181,12 @@ window.arcaneMetadata.programs = {
       { element: "void", face: 1 },
       { element: "void", face: 1 },
     ],
-    summary: "Reveal Rift Threads this turn.",
-    details: "Reveal all Rift Thread hexes until the turn ends.",
+    summary: "Reveal and pull Rift Threads.",
+    details: "Reveal all Rift Thread hexes until the turn ends and move each uncollected Rift Thread 1 hex closer to you when possible.",
     cooldown: 1,
     effect: {
       type: "revealRiftThreads",
+      moveThreadsCloser: 1,
     },
   },
   bolt: {
@@ -249,11 +252,11 @@ window.arcaneMetadata.programs = {
     name: "PHASE",
     requirement: [{ element: "mind", face: 2 }],
     summary: "Move and attack through walls.",
-    details: "Move and attack through walls until the end of your next turn.",
+    details: "Move and attack through walls for the next 5 turns.",
     cooldown: 2,
     effect: {
       type: "phaseThroughWalls",
-      playerTurns: 2,
+      playerTurns: 5,
     },
   },
   deathTouch: {

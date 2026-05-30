@@ -36,13 +36,13 @@ The metadata files are JavaScript text files loaded before `main.js` so the game
   - `damageAdjacent`: deals `amount` damage to an adjacent enemy. Set `damageType` to `arcane` or `physical`; optional `healAmount` restores Integrity after the hit.
   - `damageLine`: targets a hex `distance` spaces away in a straight line. Set `damageType`, `amount`, and optional `revealTarget`.
   - `debuffDefense`: reduces Physical Defense and Arcane Defense on an adjacent enemy by `amount`.
-  - `damageAdjacentAll`: costs optional `selfDamage` Integrity, then damages all adjacent enemies. Set `damageType` to `arcane` or `physical`.
+  - `damageAdjacentAll`: costs optional `selfDamage` Integrity, then damages all adjacent enemies. Set `damageType` to `arcane` or `physical`, or use `damageEntries` for multiple damage types.
   - `confuseEnemy`: targets an adjacent enemy; next Glitchspawn turn it attacks another enemy instead of the player.
   - `resetOtherCooldowns`: clears cooldowns on all other equipped programs.
   - `healIntegrity`: restores Integrity by `amount`.
   - `blinkStraight`: teleports exactly `distance` spaces in a straight line.
   - `nextTurnExec`: adds `amount` temporary Executions on the next player turn. Optional `currentAmount` adds temporary Executions immediately.
-  - `revealRiftThreads`: temporarily reveals all uncollected Rift Thread hexes.
+  - `revealRiftThreads`: temporarily reveals all uncollected Rift Thread hexes and can pull them closer to the player.
   - `pushEnemy`: targets an adjacent enemy, pushes it one hex away, and applies `stunTurns`.
   - `sightRangeBonus`: increases line of sight by `amount` for `playerTurns`.
   - `implodeVisible`: all visible enemies take direct damage equal to their Physical Defense.
@@ -190,11 +190,11 @@ The Void transparent image mapping is intentionally remapped in `dice.void.files
 - The Rift tile is selected from farther non-start border tiles and uses `hexes/rift_hex.png` for all rooms.
 - Never-seen hidden tiles use `hex_hidden.png`, but their real tile type is pre-generated and static.
 - Once a tile has been visible, it remains explored after the player moves away: it shows its real tile art in a greyed-out state instead of returning to blank.
-- Tier 2+ rooms include one Cache tile and one separate floating Artifact pickup.
+- Tier 2+ rooms attempt to place one Cache tile and one separate floating Artifact pickup. Each Cache placement has a 30% chance to stay a normal hex and become an extra pip-only Artifact pickup instead.
 - Cache tile upgrades only offer Program rewards. Program choices appear when at least one of the Program's required sigil elements is present in the character's dice pool. Program rewards are always added to the Program Library, even if CACHE is full.
 - Program cache rewards show two program choices and include the program effect text.
 - Increasing CACHE capacity does not automatically equip extra Programs. Empty Cache slots remain empty until the player explicitly selects Programs in `Change Programs` and confirms the loadout.
-- Floating Artifact pickups use `artifact_1.png` and open a choice between two random Artifacts when collected.
+- Floating Artifact pickups use `artifact_1.png` and open a choice between two random Artifacts when collected. Pip-only pickups only roll pip artifacts and add the selected pip to `character.pipInventory`.
 - Floating Sigil pickups appear in rooms and use the current pixel-art element sigil asset. Moving onto one collects it and opens a New Sigil Acquired popup where the player can equip it to a blank die face.
 - Floating Sigil pickups are placed at least 3 hexes away from the player start when the generated room has a valid candidate tile that far away.
 - If there are no blank custom die faces, collected Sigils are held in `character.sigilInventory` for future handling.
@@ -230,7 +230,7 @@ Rooms are exploration + Thread Hunt rooms. The player must collect all Rift Thre
 | 6         | 96        | 4            | 1      | 6       |
 | 7+        | up to 120 | up to 6      | 1      | up to 9 |
 
-- Enemies are placed on or near the Rift tile at room start when the Rift shares the player's landmass. If the Rift is on a separated island, enemies spawn from the player's starting island instead.
+- Tier 1 enemies spawn on the Rift for onboarding rooms, except Parcel 7 where the Tier 1 enemy spawns on the player's island so the Rift can remain across the gap. Later enemies are placed on or near the Rift tile when the Rift shares the player's landmass. In disconnected island rooms, enemy spawn placement seeds at least one enemy on each connected island when there are enough enemies, then fills remaining enemies from the normal spawn pool. Parcel 7 enemies are hyper-aggressive from Tier 2 onward and always try to move toward the player each enemy turn.
 - Additional threads are distributed across non-Rift, non-start border tiles.
 - Room tier is determined by the node's position on the Level Map, not the player's level.
 - Cache tiles do not appear in Tier 1. Cache tiles and artifact pickups appear in Tier 2+ rooms.
@@ -253,9 +253,12 @@ The camera bounds are intended to allow any hex tile to be centered in the viewp
 - `Move` enables adjacent movement selection.
 - `Sigil-Cast` activates the Sigil-Casting panel below the program list.
 - `Programs` and `Crafting` sit in the bottom action row with Move, Sigil-Cast, and End Turn. Each costs 1 Action to open. `Programs` opens equipped Program selection; `Crafting` opens the dice workbench over the current room without leaving the level.
+- The Equip Programs overlay keeps the Confirm Loadout button pinned below the owned-program list while the list itself scrolls inside the panel.
 - The first `Cast Sigils` roll casts all equipped dice automatically.
 - Each turn starts with Actions equal to the current Actions stat. Each hex moved spends 1 Action. Opening the Sigil-Casting panel spends 1 Action and starts a full Sigil-Cast.
 - Executions control roll attempts inside the active Sigil-Cast. The first roll casts all equipped dice automatically; later Execution rolls can choose unassigned sigils to reroll while keeping the others.
+- If no target/assignment is pending, the player can spend another Action to abandon the current rolled symbols and start a fresh Sigil-Cast. They do not have to use a valid program or physical attack from the current rolls.
+- When Sigil-Casting is active, the left control rail expands into the open space beside the program cards. Rerollable dice are compact square buttons in a two-column grid, switching to a smaller three-column layout at 5+ dice, and the `Cast Sigils` button sits in a right-side column so it remains visible when several dice are equipped.
 - `End Turn` resets Actions, advances the turn counter, runs the current Glitch Spawn step, and resolves adjacent enemy attacks.
 - If all Glitchspawn in the room are derezzed, a one-time notice appears. After that, enemy turns are skipped, but movement still spends Actions normally.
 - The map viewport shows the current phase as `Player Turn` or `Glitchspawn Turn` in its upper-right corner.
@@ -276,6 +279,7 @@ The camera bounds are intended to allow any hex tile to be centered in the viewp
 - Unlocked nodes and open route connections glow white. Completed nodes use a green completion treatment.
 - Pressing a node only selects it; the player must press `Enter` to launch that room.
 - The Level Map has a `Crafting` button above the map. Crafting opens a dice workbench where the player can drag or click sigils between the Databank inventory and custom die faces, then press `Done Crafting` to return to the Level Map.
+- The Level Map header shows the current Cycles total next to the Crafting button so players can check their money before entering a market.
 - Room tier is derived from the selected world-map node depth. Start nodes are Tier 1 and boss nodes are Tier 6.
 
 ### Level Map Current Implementation
@@ -341,7 +345,7 @@ Current temporary artifact pool:
 - `Mag Shield` (Uncommon): 1 use. Blocks all damage for 3 turns.
 - `Sky Walkers` (Common): 1 use. Each Move action covers 1 extra space for 5 turns.
 
-Artifact choice rewards roll rarity first, then choose an artifact from that rarity pool. `Sigil-Glyph` instances roll and store a specific sigil when acquired.
+Artifact choice rewards roll rarity first, then choose an artifact from that rarity pool. Choice popups exclude duplicate artifact ids within the same offer. `Sigil-Glyph` instances roll and store a specific sigil when acquired.
 Artifact choice cards and the player artifact bar use images from `artifacts/`; `Sigil-Glyph` uses its stored sigil image unless a dedicated artifact image is added later. During Sigil-Casting, assignable Sigil-Glyphs highlight in the artifact bar after a program is selected, then clicking the highlighted artifact spends it.
 One-use artifacts are removed from the player artifact bar when their final use is consumed.
 
@@ -366,24 +370,24 @@ Current pip artifact pool:
   - all unique symbols: 1 physical damage
   - two matching symbols: 3 physical damage
   - three or more matching symbols: 5 physical damage
-- Blank results never count toward Physical Damage matching, even if a blank roll lacks a `blank` flag in state; Physical Damage only counts real rolled sigils with an element and face.
+- Blank results never count toward Physical Damage matching, even if a blank roll lacks a `blank` flag in state; Physical Damage only counts real rolled dice sigils with an element and face. Sigil-Glyph artifact symbols do not count toward Physical Damage matching.
 
 Implemented program effects:
 - `SPARK`: consumes one common Surge symbol, targets a hex exactly 2 spaces away in a straight line, and deals 2 physical damage minus Physical Defense if an enemy is there.
-- `REBUILD`: consumes one common Life symbol and restores 1 Integrity immediately.
+- `REBUILD`: consumes one common Life symbol, restores 1 Integrity immediately, and has a 3-turn cooldown.
 - `BLINK`: consumes one common Void symbol, then targets a connected hex exactly 3 spaces away in a straight line and teleports there.
-- `QUAKE`: consumes one common Surge and one common Life symbol, temporarily reveals all valid target hexes 2 spaces away in a straight line while aiming, and deals 1 physical damage if an enemy is there.
+- `QUAKE`: consumes one common Surge and one common Life symbol, then deals 1 Physical Damage and 1 Arcane Damage to all adjacent enemies.
 - `SHATTER`: consumes one common Mind and one common Surge symbol, then reduces an adjacent enemy's Physical Defense and Arcane Defense by 1.
 - `BLINK II`: consumes one common Surge and one common Void symbol, then teleports exactly 4 spaces in a straight line.
 - `DRAIN`: consumes one common Life and one common Mind symbol, deals 1 arcane damage to an adjacent enemy, then heals 1 Integrity.
 - `CONFUSE`: consumes one common Mind and one common Void symbol, then makes an adjacent enemy attack another Glitchspawn on its next turn instead of the player.
 - `FORTIFY`: consumes one common Void and one common Life symbol, then clears cooldowns on all other equipped programs.
-- `RIFT`: consumes two common Void symbols, then reveals all uncollected Rift Thread hexes for the current turn.
+- `RIFT`: consumes two common Void symbols, reveals all uncollected Rift Thread hexes for the current turn, and moves each uncollected Rift Thread 1 hex closer to the player when a valid adjacent tile exists.
 - `BOLT`: consumes two common Surge symbols, then deals 3 arcane damage to an adjacent enemy.
 - `PUSH`: consumes two common Life symbols, then pushes an adjacent enemy one hex away and stuns it for its next turn.
 - `SHADOW`: consumes two common Mind symbols, then lets the player move through enemy-occupied hexes until the end of the next player turn. The player still cannot stop on an enemy.
 - `ENTANGLE`: consumes one uncommon Life symbol, then sets all adjacent enemies to 0% accuracy for their next enemy turn.
-- `PHASE`: consumes one uncommon Mind symbol, then lets the player move and attack through walls until the end of the next player turn. Enemies still respect walls.
+- `PHASE`: consumes one uncommon Mind symbol, then lets the player move and attack through walls for the next 5 turns. Enemies still respect walls.
 - `DEATHTOUCH`: consumes one uncommon Void symbol, targets an enemy exactly 2 spaces away in a straight line, destroys it, and moves the player onto that hex.
 - `BOLT II`: consumes one uncommon Surge symbol, then deals 4 arcane damage to an adjacent enemy.
 - `IMPLODE`: consumes one common Surge and one uncommon Surge, then all visible enemies take direct physical damage equal to their Physical Defense. Cooldown 5.
@@ -445,7 +449,8 @@ If the Void Raider is within the player's visible tiles, its tile is highlighted
 - Tier 1 rooms: 1 Void Raider starts on the Rift with 1 Integrity and uses stationary behavior, so it does not move off the Rift.
 - Tier 2 rooms: 2 enemies, mix of Void Raider and Surge Crawler.
 - Tier 3 rooms: 3 enemies, introduce Mind Phantom. Begin mixing all three types.
-- Tier 4+ rooms: enemy counts keep increasing with tier until the current cap of 9 enemies.
+- Tier 4+ rooms: enemy counts keep increasing with tier until the current cap of 9 enemies. Enemy rosters are weighted-random instead of fixed-pattern; Void Raider is removed from the Tier 4+ pool, while stronger enemies such as Shadowclaw and Rift Ghoul are eligible but less common than mid-tier Glitchspawn.
+- Current Tier 4+ enemy weights: Surge Crawler 28, Mind Phantom 24, Plasmoid 18, Skin-Eater 14, Shadowclaw 8, Rift Ghoul 8.
 - Enemy Integrity, Power, Accuracy, Defense, and XP value scale upward by room tier.
 
 ### Multiple Enemy Support

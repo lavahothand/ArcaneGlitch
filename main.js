@@ -636,7 +636,7 @@ const programs = metadata.programs || {
     requirement: [{ element: "life", face: 1 }],
     summary: "Heal 1 Integrity.",
     details: "Spend one common Life symbol to restore 1 Integrity.",
-    cooldown: 0,
+    cooldown: 3,
     effect: {
       type: "healIntegrity",
       amount: 1,
@@ -672,11 +672,11 @@ const programs = metadata.programs || {
     name: "PHASE",
     requirement: [{ element: "mind", face: 2 }],
     summary: "Move and attack through walls.",
-    details: "Move and attack through walls until the end of your next turn.",
+    details: "Move and attack through walls for the next 5 turns.",
     cooldown: 2,
     effect: {
       type: "phaseThroughWalls",
-      playerTurns: 2,
+      playerTurns: 5,
     },
   },
   deathTouch: {
@@ -816,22 +816,12 @@ function getRandomOptions(items, count) {
   return [...items].sort(() => Math.random() - 0.5).slice(0, count);
 }
 
-function rollArtifactFromPool(artifactPool = artifacts) {
-  const rarityWeights = [
-    { rarity: "common", chance: 58 },
-    { rarity: "uncommon", chance: 32 },
-    { rarity: "rare", chance: 10 },
-  ];
-  const rarity = rollWeightedEntry(rarityWeights, rarityWeights[0]).rarity;
-  const matchingArtifacts = artifactPool.filter((artifact) => (artifact.rarity || "common") === rarity);
-  const options = matchingArtifacts.length ? matchingArtifacts : artifactPool;
-  const artifact = options[Math.floor(Math.random() * options.length)];
-
+function createArtifactInstance(artifact, sigilProfile = {}) {
   if (artifact?.id === "sigilGlyph") {
     return {
       ...artifact,
       instanceId: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      sigil: rollSigilFromProfile({}),
+      sigil: rollSigilFromProfile(sigilProfile),
     };
   }
 
@@ -841,6 +831,39 @@ function rollArtifactFromPool(artifactPool = artifacts) {
         instanceId: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       }
     : null;
+}
+
+function rollArtifactFromPool(artifactPool = artifacts, excludedArtifactIds = new Set()) {
+  const rarityWeights = [
+    { rarity: "common", chance: 58 },
+    { rarity: "uncommon", chance: 32 },
+    { rarity: "rare", chance: 10 },
+  ];
+  const rarity = rollWeightedEntry(rarityWeights, rarityWeights[0]).rarity;
+  const availableArtifacts = artifactPool.filter((artifact) => !excludedArtifactIds.has(artifact.id));
+  const matchingArtifacts = availableArtifacts.filter((artifact) => (artifact.rarity || "common") === rarity);
+  const options = matchingArtifacts.length ? matchingArtifacts : availableArtifacts;
+  const artifact = options[Math.floor(Math.random() * options.length)];
+
+  return createArtifactInstance(artifact);
+}
+
+function rollUniqueArtifactsFromPool(count, artifactPool = artifacts) {
+  const selectedArtifacts = [];
+  const selectedIds = new Set();
+
+  for (let index = 0; index < count; index += 1) {
+    const artifact = rollArtifactFromPool(artifactPool, selectedIds);
+
+    if (!artifact) {
+      break;
+    }
+
+    selectedArtifacts.push(artifact);
+    selectedIds.add(artifact.id);
+  }
+
+  return selectedArtifacts;
 }
 
 function rollArtifactFromRarity(rarity, artifactPool = artifacts) {
@@ -1160,14 +1183,23 @@ function hasWallBetweenTiles(wallEdges, tileA, tileB) {
 }
 
 function buildEnemyRoster(count, tier = 1) {
+  if (tier >= 4) {
+    const weightedPool = [
+      { id: "surgeCrawler", chance: 28 },
+      { id: "mindPhantom", chance: 24 },
+      { id: "plasmoid", chance: 18 },
+      { id: "skinEater", chance: 14 },
+      { id: "shadowclaw", chance: 8 },
+      { id: "riftGhoul", chance: 8 },
+    ];
+
+    return Array.from({ length: count }, () => rollWeightedEntry(weightedPool, weightedPool[0]).id);
+  }
+
   const pattern = ["voidRaider", "surgeCrawler", "mindPhantom", "surgeCrawler", "voidRaider"];
 
   if (tier >= 3) {
     pattern.splice(2, 0, "plasmoid", "skinEater");
-  }
-
-  if (tier >= 4) {
-    pattern.splice(4, 0, "shadowclaw", "riftGhoul");
   }
 
   return Array.from({ length: count }, (_, index) => pattern[index % pattern.length]);
@@ -1491,6 +1523,14 @@ function addIslandCluster(coords, occupied, center, maxSize, blockedKeys = new S
   }
 }
 
+function getRoomCoordBufferKeys(coords) {
+  return new Set(
+    coords.flatMap((coord) =>
+      getNeighborCoords(coord).map((neighbor) => tileKey(neighbor.q, neighbor.r))
+    )
+  );
+}
+
 function getParcel7ExtraIslandCount(levelNode) {
   const tier = Math.max(1, levelNode?.tier || 1);
 
@@ -1532,11 +1572,17 @@ function createIslandRoomCoords(tileCount, levelNode = null) {
     const gapOne = { q: edge.q + direction.q, r: edge.r + direction.r };
     const center = { q: edge.q + direction.q * 2, r: edge.r + direction.r * 2 };
     const remaining = tileCount - coords.length;
-    const blockedKeys = new Set([tileKey(gapOne.q, gapOne.r)]);
+    const blockedKeys = new Set([tileKey(gapOne.q, gapOne.r), ...getRoomCoordBufferKeys(coords)]);
     const remainingClusters = Math.max(1, clusterCount - islandsPlaced);
+    const coordsBeforeIsland = coords.length;
 
     islandSize = Math.min(remaining, Math.max(5, Math.ceil(remaining / remainingClusters) + Math.floor(Math.random() * 3) - 1));
     addIslandCluster(coords, occupied, center, islandSize, blockedKeys);
+
+    if (coords.length === coordsBeforeIsland) {
+      continue;
+    }
+
     currentCenter = center;
     islandsPlaced += 1;
 
@@ -1864,27 +1910,32 @@ function generateRoomTiles(roomConfig = getRoomConfigForTier(1), levelNode = nul
     ? tiles.filter((tile) => tile.id !== "tile-0" && tile.id !== riftTile.id && !threadTileIds.includes(tile.id))
     : [];
   const cacheTile = cacheCandidates[Math.floor(Math.random() * cacheCandidates.length)];
+  const cacheBecomesPipArtifact = Boolean(cacheTile) && Math.random() < 0.3;
+  const actualCacheTile = cacheBecomesPipArtifact ? null : cacheTile;
+  const pipArtifactTile = cacheBecomesPipArtifact ? cacheTile : null;
   const artifactCandidates = shouldSpawnCache
     ? tiles.filter(
         (tile) =>
           tile.id !== "tile-0" &&
           tile.id !== riftTile.id &&
-          tile.id !== cacheTile?.id &&
+          tile.id !== actualCacheTile?.id &&
+          tile.id !== pipArtifactTile?.id &&
           !threadTileIds.includes(tile.id)
       )
     : [];
   const artifactTile = artifactCandidates[Math.floor(Math.random() * artifactCandidates.length)];
 
-  if (cacheTile) {
-    cacheTile.type = "cache";
+  if (actualCacheTile) {
+    actualCacheTile.type = "cache";
   }
 
   const sigilCandidates = tiles.filter(
     (tile) =>
       tile.id !== "tile-0" &&
       tile.id !== riftTile.id &&
-      tile.id !== cacheTile?.id &&
+      tile.id !== actualCacheTile?.id &&
       tile.id !== artifactTile?.id &&
+      tile.id !== pipArtifactTile?.id &&
       !threadTileIds.includes(tile.id)
   );
   const distantSigilCandidates = sigilCandidates.filter((tile) => getHexDistance(tile, tiles[0]) >= 3);
@@ -1897,8 +1948,9 @@ function generateRoomTiles(roomConfig = getRoomConfigForTier(1), levelNode = nul
     "tile-0",
     riftTile.id,
     ...threadTileIds,
-    ...(cacheTile ? [cacheTile.id] : []),
+    ...(actualCacheTile ? [actualCacheTile.id] : []),
     ...(artifactTile ? [artifactTile.id] : []),
+    ...(pipArtifactTile ? [pipArtifactTile.id] : []),
     ...sigilPickups.map((pickup) => pickup.tileId),
   ]);
   const extraTileCandidates = tiles.filter((tile) => !reservedTileIds.has(tile.id));
@@ -1935,8 +1987,9 @@ function generateRoomTiles(roomConfig = getRoomConfigForTier(1), levelNode = nul
     tiles,
     riftTileId: riftTile.id,
     threadTileIds,
-    cacheTileIds: cacheTile ? [cacheTile.id] : [],
+    cacheTileIds: actualCacheTile ? [actualCacheTile.id] : [],
     artifactTileIds: artifactTile ? [artifactTile.id] : [],
+    pipArtifactTileIds: pipArtifactTile ? [pipArtifactTile.id] : [],
     sigilPickups,
     wallEdges,
   };
@@ -2333,7 +2386,9 @@ function canCastProgram(program, castSymbols, cooldownLockedProgramIds = new Set
 }
 
 function getPhysicalDamage(castSymbols) {
-  const availableSymbols = Array.isArray(castSymbols) ? castSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent) : [];
+  const availableSymbols = Array.isArray(castSymbols)
+    ? castSymbols.filter((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent && !symbol.artifactInstanceId)
+    : [];
 
   if (!availableSymbols.length) {
     return 1;
@@ -2391,7 +2446,7 @@ function renderSigilDieImage(symbol, label = "") {
 }
 
 function renderPhysicalDamageProgram(castSymbols, allocatedSymbols = []) {
-  const isAvailable = Array.isArray(castSymbols) && castSymbols.some((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent);
+  const isAvailable = Array.isArray(castSymbols) && castSymbols.some((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent && !symbol.artifactInstanceId);
   const damage = getPhysicalDamage(castSymbols);
 
   return `
@@ -3528,6 +3583,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   const riftThreadTileIds = room.threadTileIds;
   const cacheTileIds = room.cacheTileIds || [];
   const artifactTileIds = room.artifactTileIds || [];
+  const pipArtifactTileIds = room.pipArtifactTileIds || [];
+  const allArtifactTileIds = [...artifactTileIds, ...pipArtifactTileIds];
   const sigilPickups = room.sigilPickups || [];
   const wallEdges = room.wallEdges || [];
   const collectedThreadTileIds = [...(savedRoomState?.collectedThreadTileIds || [])];
@@ -3549,13 +3606,40 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   const enemySpawnTiles = isRiftOnPlayerIsland
     ? [riftTile, ...enemySpawnCandidates]
     : enemySpawnCandidates;
+  const islandSeedSpawnTiles = spawnTileGroups
+    .map((group) => {
+      const isPlayerGroup = group.some((tile) => tile.id === "tile-0");
+      const isRiftGroup = group.some((tile) => tile.id === riftTile.id);
+      const candidates = group
+        .filter((tile) => tile.id !== "tile-0")
+        .filter((tile) => isRiftGroup || tile.id !== riftTile.id)
+        .sort((a, b) =>
+          isPlayerGroup
+            ? getHexDistance(b, roomTiles[0]) - getHexDistance(a, roomTiles[0])
+            : isRiftGroup
+              ? getHexDistance(a, riftTile) - getHexDistance(b, riftTile)
+              : getHexDistance(b, roomTiles[0]) - getHexDistance(a, roomTiles[0])
+        );
+
+      return candidates[0] || null;
+    })
+    .filter(Boolean);
+  const tierOneEnemySpawnTiles = levelNode.zoneId === "parcel7"
+    ? enemySpawnCandidates
+    : [riftTile];
+  const distributedEnemySpawnTiles = levelNode.tier === 1
+    ? tierOneEnemySpawnTiles
+    : [...new Map([...islandSeedSpawnTiles, ...enemySpawnTiles].map((tile) => [tile.id, tile])).values()];
   const activeEnemies = savedRoomState?.activeEnemies || roomConfig.enemyTypes.map((enemyType, index) => {
-    const spawnTile = enemySpawnTiles[index] || enemySpawnCandidates[0] || riftTile;
+    const spawnTile = distributedEnemySpawnTiles[index] || enemySpawnTiles[index] || enemySpawnCandidates[0] || riftTile;
     const enemy = createEnemyInstance(enemyType, index, spawnTile.id, levelNode.tier);
 
     if (levelNode.tier === 1) {
       enemy.behavior = "stationary";
       enemy.stats.integrity = 1;
+    } else if (levelNode.zoneId === "parcel7") {
+      enemy.behavior = "hyperAggressive";
+      enemy.stats.move = Math.max(1, enemy.stats.move || 1);
     }
 
     return enemy;
@@ -3624,8 +3708,10 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
             <p class="signal">Sigil-Casting</p>
             <span id="roll-status">${getExecutionStatusText(executionRollsRemaining)}</span>
           </header>
-          <div class="roll-options" id="roll-options"></div>
-          <div class="roll-results" id="roll-results"></div>
+          <div class="runecast-dice-column">
+            <div class="roll-options" id="roll-options"></div>
+            <div class="roll-results" id="roll-results"></div>
+          </div>
           <button class="primary-action roll-confirm" type="button" id="roll-confirm" disabled>Cast Sigils</button>
         </section>
       </aside>
@@ -3835,6 +3921,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     threadTileIds: riftThreadTileIds,
     cacheTileIds,
     artifactTileIds,
+    pipArtifactTileIds,
       sigilPickups,
       cycleDrops,
       wallCount: wallEdges.length,
@@ -4598,6 +4685,16 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   function dealEnemyIntegrityDamage(enemy, rawDamage, defenseStat) {
+    if (!enemy || enemy.stats.integrity <= 0) {
+      return {
+        dealtDamage: 0,
+        enemyIntegrityBeforeDamage: enemy?.stats?.integrity || 0,
+        didDefeat: false,
+        cycleDrop: null,
+        didLevelUp: false,
+      };
+    }
+
     const enemyIntegrityBeforeDamage = enemy.stats.integrity;
     const defeatedTileId = enemy.positionId;
     const dealtDamage = Math.max(0, rawDamage - (enemy.stats[defenseStat] || 0));
@@ -4622,6 +4719,24 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       cycleDrop,
       didLevelUp,
     };
+  }
+
+  function getAdjacentAllDamageEntries(effect) {
+    if (Array.isArray(effect.damageEntries) && effect.damageEntries.length) {
+      return effect.damageEntries.map((entry) => ({
+        amount: Number.isFinite(entry.amount) ? entry.amount : 1,
+        defenseStat: entry.damageType === "arcane" ? "arcaneDefense" : "physicalDefense",
+        damageType: entry.damageType === "arcane" ? "arcane" : "physical",
+      }));
+    }
+
+    return [
+      {
+        amount: Number.isFinite(effect.amount) ? effect.amount : 1,
+        defenseStat: effect.damageType === "arcane" ? "arcaneDefense" : "physicalDefense",
+        damageType: effect.damageType === "arcane" ? "arcane" : "physical",
+      },
+    ];
   }
 
   function getPlayerWallEdges() {
@@ -4671,7 +4786,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       targetableEnemyTileIds,
       riftThreadTileIds,
       collectedThreadTileIds,
-      artifactTileIds,
+      allArtifactTileIds,
       collectedArtifactTileIds,
       sigilPickups,
       collectedSigilTileIds,
@@ -4696,8 +4811,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     document.querySelector(".thread-tracker").outerHTML = renderThreadTracker(collectedThreadTileIds.length, riftThreadTileIds.length);
     moveButton.disabled = !isPlayerPhase || !canMove;
     moveButton.textContent = actionPointsRemaining > 0 ? `Move (${actionPointsRemaining})` : "Actions Spent";
-    rollButton.disabled = !isPlayerPhase || isLevelComplete || isRunDefeated || actionPointsRemaining <= 0 || isRunecastingActive;
-    rollButton.textContent = isRunecastingActive
+    const canStartFreshCast = canStartFreshRunecastingAction();
+    rollButton.disabled = !canStartFreshCast;
+    rollButton.textContent = isRunecastingActive && !canStartFreshCast
       ? "Sigil-Casting"
       : actionPointsRemaining > 0
         ? `Sigil-Cast (${actionPointsRemaining})`
@@ -5160,6 +5276,17 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     });
   }
 
+  function canStartFreshRunecastingAction() {
+    return turnPhase === "player" &&
+      !isLevelComplete &&
+      !isRunDefeated &&
+      actionPointsRemaining > 0 &&
+      !isRolling &&
+      !pendingAttack &&
+      !isBlinkTargetMode &&
+      !pendingSymbolAssignment;
+  }
+
   function hasUsableCastSymbols() {
     return Array.isArray(currentCastSymbols) && getCastSymbolsWithGlyphs().some((symbol) => isUsableSigilSymbol(symbol) && !symbol.spent);
   }
@@ -5207,11 +5334,12 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
       gameLog("tile.cacheAccessed", { tileId: characterPositionId, state: getRoomDebugState() });
     }
 
-    if (artifactTileIds.includes(characterPositionId) && !collectedArtifactTileIds.includes(characterPositionId)) {
+    if (allArtifactTileIds.includes(characterPositionId) && !collectedArtifactTileIds.includes(characterPositionId)) {
       collectedArtifactTileIds.push(characterPositionId);
       window.setTimeout(() => showArtifactChoice(characterPositionId), 120);
-      status = status ? `${status} Artifact signal accessed.` : "Artifact signal accessed.";
-      gameLog("tile.artifactAccessed", { tileId: characterPositionId, state: getRoomDebugState() });
+      const isPipArtifact = pipArtifactTileIds.includes(characterPositionId);
+      status = status ? `${status} ${isPipArtifact ? "Pip" : "Artifact"} signal accessed.` : `${isPipArtifact ? "Pip" : "Artifact"} signal accessed.`;
+      gameLog("tile.artifactAccessed", { tileId: characterPositionId, pipOnly: isPipArtifact, state: getRoomDebugState() });
     }
 
     const sigilPickup = sigilPickups.find((pickup) => pickup.tileId === characterPositionId);
@@ -5255,6 +5383,59 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     }
 
     return status;
+  }
+
+  function moveRiftThreadsCloserToPlayer() {
+    const playerTile = roomTiles.find((tile) => tile.id === characterPositionId);
+
+    if (!playerTile) {
+      return 0;
+    }
+
+    const blockedDestinationIds = new Set([
+      characterPositionId,
+      riftTile?.id,
+      ...collectedThreadTileIds,
+    ].filter(Boolean));
+    const activeThreadTileIds = new Set(
+      riftThreadTileIds.filter((tileId) => !collectedThreadTileIds.includes(tileId))
+    );
+    let movedThreadCount = 0;
+
+    riftThreadTileIds.forEach((tileId, index) => {
+      if (collectedThreadTileIds.includes(tileId)) {
+        return;
+      }
+
+      const currentTile = roomTiles.find((tile) => tile.id === tileId);
+
+      if (!currentTile) {
+        return;
+      }
+
+      activeThreadTileIds.delete(tileId);
+      const currentDistance = getHexDistance(currentTile, playerTile);
+      const destination = roomTiles
+        .filter(
+          (tile) =>
+            getHexDistance(currentTile, tile) === 1 &&
+            getHexDistance(tile, playerTile) < currentDistance &&
+            !blockedDestinationIds.has(tile.id) &&
+            !activeThreadTileIds.has(tile.id)
+        )
+        .sort((a, b) => getHexDistance(a, playerTile) - getHexDistance(b, playerTile))[0];
+
+      if (!destination) {
+        activeThreadTileIds.add(tileId);
+        return;
+      }
+
+      riftThreadTileIds[index] = destination.id;
+      activeThreadTileIds.add(destination.id);
+      movedThreadCount += 1;
+    });
+
+    return movedThreadCount;
   }
 
   function finishLevelIfComplete(status) {
@@ -5475,11 +5656,16 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   function showArtifactChoice(tileId) {
-    const artifactOptions = Array.from({ length: 2 }, () => rollArtifactFromPool()).filter(Boolean);
+    const isPipArtifact = pipArtifactTileIds.includes(tileId);
+    const artifactPool = isPipArtifact
+      ? artifacts.filter((artifact) => artifact.type === "pip" || artifact.effect?.type === "pip")
+      : artifacts;
+    const artifactOptions = rollUniqueArtifactsFromPool(2, artifactPool);
     const overlay = document.createElement("div");
 
     gameLog("artifact.popup.open", {
       tileId,
+      pipOnly: isPipArtifact,
       artifactOptions: artifactOptions.map((artifact) => artifact.id),
       state: getRoomDebugState(),
     });
@@ -5487,8 +5673,8 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
     overlay.className = "cache-upgrade-overlay artifact-choice-overlay";
     overlay.innerHTML = `
       <section class="cache-upgrade-panel" aria-labelledby="artifact-choice-title">
-        <p class="signal">Artifact Signal</p>
-        <h2 id="artifact-choice-title">Choose Artifact</h2>
+        <p class="signal">${isPipArtifact ? "Pip Signal" : "Artifact Signal"}</p>
+        <h2 id="artifact-choice-title">Choose ${isPipArtifact ? "Pip" : "Artifact"}</h2>
         <div class="cache-upgrade-grid">
           ${
             artifactOptions.length
@@ -5523,7 +5709,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         overlay.remove();
         updateRoom();
         roomStatus.textContent = `${acquiredArtifact.name} acquired. ${getArtifactDisplayLabel(acquiredArtifact)}.`;
-        gameLog("tile.artifactCollected", { tileId, artifactId: acquiredArtifact.id, state: getRoomDebugState() });
+        gameLog("tile.artifactCollected", { tileId, artifactId: acquiredArtifact.id, pipOnly: isPipArtifact, state: getRoomDebugState() });
       });
     });
   }
@@ -6083,8 +6269,18 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
   }
 
   rollButton.addEventListener("click", () => {
-    if (turnPhase !== "player" || isRunecastingActive || isLevelComplete || actionPointsRemaining <= 0) {
+    if (!canStartFreshRunecastingAction()) {
       return;
+    }
+    if (isRunecastingActive) {
+      isRunecastingActive = false;
+      currentCastSymbols = null;
+      allocatedProgramSymbols = {};
+      selectedRollSlots.length = 0;
+      pendingPhysicalDamage = 0;
+      pendingAttack = null;
+      pendingSymbolAssignment = null;
+      isBlinkTargetMode = false;
     }
     activateRunecasting();
   });
@@ -6293,6 +6489,7 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
       if (effect.type === "revealRiftThreads") {
         markProgramAllocated(programId, program, allocatedSymbols);
+        const movedThreadCount = effect.moveThreadsCloser ? moveRiftThreadsCloserToPlayer() : 0;
         temporaryRevealTileIds = new Set(riftThreadTileIds.filter((tileId) => !collectedThreadTileIds.includes(tileId)));
         isMoveMode = false;
         isPhysicalTargetMode = false;
@@ -6304,9 +6501,9 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
         updateProgramAvailability();
         updateRunecastingPanel();
         updateRoom();
-        roomStatus.textContent = `${program.name} revealed ${temporaryRevealTileIds.size} Rift Thread ${temporaryRevealTileIds.size === 1 ? "hex" : "hexes"} for this turn.`;
+        roomStatus.textContent = `${program.name} revealed ${temporaryRevealTileIds.size} Rift Thread ${temporaryRevealTileIds.size === 1 ? "hex" : "hexes"} and pulled ${movedThreadCount} closer.`;
         finishRunecastingIfNoOptions(roomStatus.textContent);
-        gameLog("program.riftThreadsRevealed", { programId, revealedTileIds: [...temporaryRevealTileIds], state: getRoomDebugState() });
+        gameLog("program.riftThreadsRevealed", { programId, revealedTileIds: [...temporaryRevealTileIds], movedThreadCount, state: getRoomDebugState() });
         return;
       }
 
@@ -6644,12 +6841,25 @@ function showInitialRoom(character, nodeId = startingMapState.selectedNode, save
 
         const rawSelfDamage = Number.isFinite(effect.selfDamage) ? effect.selfDamage : 0;
         const selfDamage = character.damageShieldTurns > 0 ? 0 : rawSelfDamage;
-        const rawDamage = Number.isFinite(effect.amount) ? effect.amount : 1;
-        const defense = effect.damageType === "arcane" ? "arcaneDefense" : "physicalDefense";
+        const damageEntries = getAdjacentAllDamageEntries(effect);
         const damagedEnemies = adjacentEnemyTileIds
           .map((tileId) => getEnemyAtTile(activeEnemies, tileId))
           .filter(Boolean)
-          .map((enemy) => ({ enemy, tileId: enemy.positionId, result: dealEnemyIntegrityDamage(enemy, rawDamage, defense) }));
+          .map((enemy) => {
+            const tileId = enemy.positionId;
+            const results = damageEntries.map((entry) => dealEnemyIntegrityDamage(enemy, entry.amount, entry.defenseStat));
+
+            return {
+              enemy,
+              tileId,
+              results,
+              result: {
+                dealtDamage: results.reduce((total, result) => total + result.dealtDamage, 0),
+                didDefeat: results.some((result) => result.didDefeat),
+                didLevelUp: results.some((result) => result.didLevelUp),
+              },
+            };
+          });
         const defeatedEnemies = damagedEnemies.filter((item) => item.result.didDefeat);
         const didLevelUp = damagedEnemies.some((item) => item.result.didLevelUp);
 
@@ -8144,6 +8354,7 @@ function showLevelMap(character) {
   character.progression = character.progression || { ...startingProgression };
   character.sigilInventory = character.sigilInventory || [];
   character.pipInventory = character.pipInventory || [];
+  character.cycles = Number.isFinite(character.cycles) ? character.cycles : 0;
   const mapState = ensureMapState(character);
   const selectedNode = mapState.selectedNode || startingMapState.selectedNode;
   const selectedLevelNode = levelNodes.find((node) => node.id === selectedNode) || levelNodes[0];
@@ -8175,6 +8386,9 @@ function showLevelMap(character) {
             <h2 id="level-map-title">World Map</h2>
           </div>
           <div class="level-map-tools">
+            <div class="level-map-cycles">
+              ${renderCycleTracker(character.cycles)}
+            </div>
             <button class="secondary-action crafting-map-action" type="button" id="open-crafting">Crafting</button>
           </div>
         </header>
